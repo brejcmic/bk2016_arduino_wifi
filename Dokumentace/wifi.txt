@@ -1,0 +1,24 @@
++IPD,0,299:GET / HTTP/1.1
+Host: 192.168.1.17
+User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:44.0) Gecko/20100101 Firefox/44.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: cs,en-US;q=0.7,en;q=0.3
+Accept-Encoding: gzip, deflate
+Connection: keep-alive
+
+odpoved:
++IPD,4,467:HTTP/1.1 302 Found
+Cache-Control: private
+Content-Type: text/html; charset=UTF-8
+Location: http://www.google.cz/?gfe_rd=cr&ei=DTTlVtOaI6Ts8wer3oIw
+Content-Length: 256
+Date: Sun, 13 Mar 2016 09:34:05 GMT
+
+<HTML><HEAD><meta http-equiv="content-type" content="text/html;charset=utf-8">
+<TITLE>302 Moved</TITLE></HEAD><BODY>
+<H1>302 Moved</H1>
+The document has moved
+<A HREF="http://www.google.cz/?gfe_rd=cr&amp;ei=DTTlVtOaI6Ts8wer3oIw">here</A>.
+</BODY></HTML>
+
+
