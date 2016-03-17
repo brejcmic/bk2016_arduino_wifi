@@ -20,33 +20,19 @@ void setup() {
   mySerial.println("AT+CIPMUX=1");
   delay(1000);
   waitFor("OK");
-  Serial.println("AT+CWJAP=\"sm3\",\"koriandr\"");
-  mySerial.println("AT+CWJAP=\"sm3\",\"koriandr\"");
+  Serial.println("AT+CWJAP=\"brejcmicDebug\",\"testwifi\"");
+  mySerial.println("AT+CWJAP=\"brejcmicDebug\",\"testwifi\"");
   waitFor("OK");
   Serial.println("AT+CIPSERVER=1,80");
   mySerial.println("AT+CIPSERVER=1,80");
   waitFor("OK");
-  Serial.println("Cekam na GET");
-  waitFor("GET");
-  delay(2000);
-  while(mySerial.available())
-  {
-      Serial.print(mySerial.read());
-  }
-  Serial.print("\n");
-  Serial.println("AT+CIPSEND=0,90");
-  mySerial.println("AT+CIPSEND=0,90");
-  waitFor(">");
-  Serial.println(htmlHead);
-  mySerial.println(htmlHead);
-  Serial.println(htmlStr);
-  mySerial.println(htmlStr);
-  waitFor("OK");
+  Serial.println("Cekam na GET /button");
+  waitFor("GET /button");
+  printHtml();
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-
 }
 
 void waitFor(const char* string)
@@ -61,7 +47,7 @@ void waitFor(const char* string)
     if(mySerial.available())
     {
       dataByte = mySerial.read();
-      Serial.print(dataByte);
+      Serial.write(dataByte);
       if(dataByte == string[idx])
       {
         idx++;
@@ -72,10 +58,23 @@ void waitFor(const char* string)
       }
     }
   }
-  while(mySerial.available())
-  {
-      dataByte = mySerial.read();
-      Serial.print(dataByte);
-  }
-  Serial.print("\n");
+  Serial.print("\n\n");
 }
+
+void printHtml()
+{
+  String webPage;
+
+  webPage = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: 4\r\n";
+  webPage += "Ahoj\r\n";
+
+  Serial.print("AT+CIPSEND=0,");
+  Serial.println(webPage.length());
+  mySerial.print("AT+CIPSEND=0,");
+  mySerial.println(webPage.length());
+  waitFor(">");
+  Serial.println(webPage);
+  mySerial.print(webPage);
+  waitFor("OK");
+}
+
