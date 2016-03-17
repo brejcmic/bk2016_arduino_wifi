@@ -1,38 +1,101 @@
 #include <SoftwareSerial.h>
 
-SoftwareSerial mySerial(10, 11); // RX, TX
+SoftwareSerial softSerial(10, 11); // RX, TX
 
-const char htmlHead[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: 4\r\n";
-const char htmlStr[] = "Ahoj\r\n";
+#define esp8266Ser  softSerial
+#define debugSer    Serial
+
+struct{
+  int client;
+  int rxLength;
+  int page;
+}htmlReq;
 
 void setup() {
-  Serial.begin(115200, SERIAL_8N1);
-  mySerial.begin(115200);
-  Serial.println("AT+UART_CUR=9600,8,1,0,0");
-  mySerial.println("AT+UART_CUR=9600,8,1,0,0");
-  mySerial.begin(9600);
-  delay(1000);
-  Serial.println("AT");
-  mySerial.println("AT");
-  delay(1000);
+  debugSer.begin(115200, SERIAL_8N1);
+  esp8266Ser.begin(115200);
+  debugSer.println("AT+UART_CUR=9600,8,1,0,0");
+  esp8266Ser.println("AT+UART_CUR=9600,8,1,0,0");
+  delay(2000); //musi byt delay na prenastaveni
+  esp8266Ser.begin(9600);
+  debugSer.println("AT");
+  esp8266Ser.println("AT");
   waitFor("OK");
-  Serial.println("AT+CIPMUX=1");
-  mySerial.println("AT+CIPMUX=1");
-  delay(1000);
+  debugSer.println("AT+CIPMUX=1");
+  esp8266Ser.println("AT+CIPMUX=1");
   waitFor("OK");
-  Serial.println("AT+CWJAP=\"brejcmicDebug\",\"testwifi\"");
-  mySerial.println("AT+CWJAP=\"brejcmicDebug\",\"testwifi\"");
+  debugSer.println("AT+CWJAP=\"brejcmicDebug\",\"testwifi\"");
+  esp8266Ser.println("AT+CWJAP=\"brejcmicDebug\",\"testwifi\"");
   waitFor("OK");
-  Serial.println("AT+CIPSERVER=1,80");
-  mySerial.println("AT+CIPSERVER=1,80");
+  debugSer.println("AT+CIPSERVER=1,80");
+  esp8266Ser.println("AT+CIPSERVER=1,80");
   waitFor("OK");
-  Serial.println("Cekam na GET /button");
-  waitFor("GET /button");
-  printHtml();
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
+  
+  printHtml();
+}
+
+void getRxID(void)
+{
+  char dataByte;
+  int idx;
+  String page = "H:";
+  
+  dataByte = '\0';
+  debugSer.println("Cekam na Prichozi komunikaci");
+  waitFor("+IPD,");
+  while(esp8266Ser.available() < 2 );
+  htmlReq.client = esp8266Ser.read();
+  htmlReq.client -= 48;
+  htmlReq.client = esp8266Ser.read();//carka
+  //pocet prichozich byte
+  while(dataByte != ':')
+  {
+    if(dataByte != '\0')
+    {
+      dataByte -= 48;
+      htmlReq.rxLength = 10 * htmlReq.rxLength + dataByte;
+      dataByte = '\0';
+    }
+    else if(esp8266Ser.available())
+    {
+      dataByte = esp8266Ser.read();
+      debugSer.write(dataByte);
+    }
+  }
+  idx = 2;
+  waitFor("GET");
+  dataByte = '\0';
+  while(dataByte != '\n' || dataByte != '\r')
+  {
+    if(dataByte != '\0')
+    {
+      page += String(dataByte);
+      dataByte = '\0';
+    }
+    else if(esp8266Ser.available())
+    {
+      dataByte = esp8266Ser.read();
+      debugSer.write(dataByte);
+      idx++;
+    }
+  }
+  //identifikace stranky
+  if(page == String("H: /button")) htmlReq.page = 1;
+  else htmlReq.page = 0;
+  while(idx < htmlReq.rxLength) //zbytek vypsat na konzoli
+  {
+    if(esp8266Ser.available())
+    {
+      dataByte = esp8266Ser.read();
+      debugSer.write(dataByte);
+      idx++;
+    }
+  }
+  debugSer.print("\n\n");
 }
 
 void waitFor(const char* string)
@@ -40,14 +103,14 @@ void waitFor(const char* string)
   char dataByte;
   int idx;
 
-  Serial.println("Prijato:");
+  debugSer.println("Prijato:");
   idx = 0;
   while(string[idx] != '\0') //pri chybe nekonecna smycka
   {
-    if(mySerial.available())
+    if(esp8266Ser.available())
     {
-      dataByte = mySerial.read();
-      Serial.write(dataByte);
+      dataByte = esp8266Ser.read();
+      debugSer.write(dataByte);
       if(dataByte == string[idx])
       {
         idx++;
@@ -58,23 +121,28 @@ void waitFor(const char* string)
       }
     }
   }
-  Serial.print("\n\n");
+  debugSer.print("\n\n");
 }
 
 void printHtml()
 {
   String webPage;
+  String headPage;
 
-  webPage = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: 4\r\n";
-  webPage += "Ahoj\r\n";
+  headPage = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n";
+  
+  webPage = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"><html><head><title> Stranka 1</title></head><body>Ahoj<form action=\"/wtf\"><input type=\"submit\" name=\"do\" value=\"zhasni\"><input type=\"submit\" name=\"do\" value=\"rozsvit\"></form> </body></html>";
+  headPage += "Content-Length: ";
+  headPage += webPage.length();
+  headPage += "\r\n\r\n"; //musi byt 2
 
-  Serial.print("AT+CIPSEND=0,");
-  Serial.println(webPage.length());
-  mySerial.print("AT+CIPSEND=0,");
-  mySerial.println(webPage.length());
+  debugSer.print("AT+CIPSEND=0,");
+  debugSer.println(headPage.length() + webPage.length());
+  esp8266Ser.print("AT+CIPSEND=0,");
+  esp8266Ser.println(headPage.length() + webPage.length());
   waitFor(">");
-  Serial.println(webPage);
-  mySerial.print(webPage);
+  debugSer.println(headPage + webPage);
+  esp8266Ser.print(headPage + webPage);
   waitFor("OK");
 }
 
