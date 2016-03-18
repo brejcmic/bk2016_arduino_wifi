@@ -12,6 +12,9 @@ struct{
 }htmlReq;
 
 void setup() {
+  pinMode(7, OUTPUT);           // set pin to input
+  digitalWrite(7, HIGH);
+  
   debugSer.begin(115200, SERIAL_8N1);
   esp8266Ser.begin(115200);
   debugSer.println("AT+UART_CUR=9600,8,1,0,0");
@@ -30,11 +33,12 @@ void setup() {
   debugSer.println("AT+CIPSERVER=1,80");
   esp8266Ser.println("AT+CIPSERVER=1,80");
   waitFor("OK");
+  digitalWrite(7, LOW);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  
+  getRxID();
   printHtml();
 }
 
@@ -48,10 +52,14 @@ void getRxID(void)
   debugSer.println("Cekam na Prichozi komunikaci");
   waitFor("+IPD,");
   while(esp8266Ser.available() < 2 );
-  htmlReq.client = esp8266Ser.read();
-  htmlReq.client -= 48;
-  htmlReq.client = esp8266Ser.read();//carka
+  dataByte = esp8266Ser.read();
+  debugSer.write(dataByte);
+  htmlReq.client = dataByte - 48;
+  dataByte = esp8266Ser.read();//carka
+  debugSer.write(dataByte);
   //pocet prichozich byte
+  dataByte = '\0';
+  htmlReq.rxLength = 0;
   while(dataByte != ':')
   {
     if(dataByte != '\0')
@@ -66,10 +74,10 @@ void getRxID(void)
       debugSer.write(dataByte);
     }
   }
-  idx = 2;
-  waitFor("GET");
+  idx = 4;
+  waitFor("GET ");
   dataByte = '\0';
-  while(dataByte != '\n' || dataByte != '\r')
+  while(dataByte != ' ')
   {
     if(dataByte != '\0')
     {
@@ -83,10 +91,26 @@ void getRxID(void)
       idx++;
     }
   }
+  debugSer.print("\nKonec identifikace stranky: ");
+  debugSer.println(page);
   //identifikace stranky
-  if(page == String("H: /button")) htmlReq.page = 1;
+  if(page == String("H:/favicon.ico")) htmlReq.page = 1;
+  else if(page == String("H:/wtf?do=rozsvit"))
+  {
+    digitalWrite(7, HIGH);
+    htmlReq.page = 0;
+  }
+  else if(page == String("H:/wtf?do=zhasni")) 
+  {
+    digitalWrite(7, LOW);
+    htmlReq.page = 0;
+  }
   else htmlReq.page = 0;
-  while(idx < htmlReq.rxLength) //zbytek vypsat na konzoli
+  //zbytek vypsat na konzoli
+  debugSer.print("Vypisovani ");
+  debugSer.print(htmlReq.rxLength);
+  debugSer.println(" znaku:");
+  while(idx < htmlReq.rxLength) 
   {
     if(esp8266Ser.available())
     {
@@ -95,7 +119,7 @@ void getRxID(void)
       idx++;
     }
   }
-  debugSer.print("\n\n");
+  debugSer.print("\nKonec cteni znaku\n\n");
 }
 
 void waitFor(const char* string)
@@ -103,7 +127,7 @@ void waitFor(const char* string)
   char dataByte;
   int idx;
 
-  debugSer.println("Prijato:");
+  debugSer.println("\nPrijato:");
   idx = 0;
   while(string[idx] != '\0') //pri chybe nekonecna smycka
   {
@@ -128,21 +152,31 @@ void printHtml()
 {
   String webPage;
   String headPage;
-
-  headPage = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n";
+  if(htmlReq.page == 1)
+  {
+    
+  }
+  else
+  {
+    headPage = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n";
+    
+    webPage = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"><html><head><title> Stranka 1</title></head><body>Ahoj<form action=\"/wtf\"><input type=\"submit\" name=\"do\" value=\"zhasni\"><input type=\"submit\" name=\"do\" value=\"rozsvit\"></form> </body></html>";
+    headPage += "Content-Length: ";
+    headPage += webPage.length();
+    headPage += "\r\n\r\n"; //musi byt 2
   
-  webPage = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"><html><head><title> Stranka 1</title></head><body>Ahoj<form action=\"/wtf\"><input type=\"submit\" name=\"do\" value=\"zhasni\"><input type=\"submit\" name=\"do\" value=\"rozsvit\"></form> </body></html>";
-  headPage += "Content-Length: ";
-  headPage += webPage.length();
-  headPage += "\r\n\r\n"; //musi byt 2
-
-  debugSer.print("AT+CIPSEND=0,");
-  debugSer.println(headPage.length() + webPage.length());
-  esp8266Ser.print("AT+CIPSEND=0,");
-  esp8266Ser.println(headPage.length() + webPage.length());
-  waitFor(">");
-  debugSer.println(headPage + webPage);
-  esp8266Ser.print(headPage + webPage);
-  waitFor("OK");
+    debugSer.print("AT+CIPSEND=");
+    debugSer.print(htmlReq.client);
+    debugSer.print(',');
+    debugSer.println(headPage.length() + webPage.length());
+    esp8266Ser.print("AT+CIPSEND=");
+    esp8266Ser.print(htmlReq.client);
+    esp8266Ser.print(',');
+    esp8266Ser.println(headPage.length() + webPage.length());
+    waitFor(">");
+    debugSer.println(headPage + webPage);
+    esp8266Ser.print(headPage + webPage);
+    waitFor("OK");
+  }
 }
 
