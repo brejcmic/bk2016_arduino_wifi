@@ -5,10 +5,14 @@ SoftwareSerial softSerial(10, 11); // RX, TX
 #define esp8266Ser  softSerial
 #define debugSer    Serial
 
+typedef enum{
+  NA, FAVICON, MAINPAGE
+}httpRequest;
+
 struct{
   int client;
   int rxLength;
-  int page;
+  httpRequest page;
 }htmlReq;
 
 void setup() {
@@ -94,18 +98,19 @@ void getRxID(void)
   debugSer.print("\nKonec identifikace stranky: ");
   debugSer.println(page);
   //identifikace stranky
-  if(page == String("H:/favicon.ico")) htmlReq.page = 1;
+  if(page == String("H:/favicon.ico")) htmlReq.page = FAVICON;
+  else if(page == String("H:/")) htmlReq.page = MAINPAGE;
   else if(page == String("H:/wtf?do=rozsvit"))
   {
     digitalWrite(7, HIGH);
-    htmlReq.page = 0;
+    htmlReq.page = MAINPAGE;
   }
   else if(page == String("H:/wtf?do=zhasni")) 
   {
     digitalWrite(7, LOW);
-    htmlReq.page = 0;
+    htmlReq.page = MAINPAGE;
   }
-  else htmlReq.page = 0;
+  else htmlReq.page = NA;
   //zbytek vypsat na konzoli
   debugSer.print("Vypisovani ");
   debugSer.print(htmlReq.rxLength);
@@ -152,11 +157,11 @@ void printHtml()
 {
   String webPage;
   String headPage;
-  if(htmlReq.page == 1)
+  if(htmlReq.page == FAVICON)
   {
     
   }
-  else
+  else if(MAINPAGE)
   {
     headPage = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n";
     
