@@ -5,10 +5,17 @@ SoftwareSerial softSerial(10, 11); // RX, TX
 #define esp8266Ser  softSerial
 #define ESP8266SPEED  9600// cilova rzchlost kolmunikace
 #define ESP8266CHARCT 20// pocet najednou odesilanych znaku
-#define ESP8266TXPER  5ul// perioda vysilani v ms
+#define ESP8266TXPER  50// perioda vysilani v ms
 
+#define DEBUG       1
 #define debugSer    Serial
-
+#if DEBUG == 1
+#define PRTDBG(x)   debugSer.println(x);
+#define WRTDBG(x)   debugSer.write(x);
+#else
+#define PRTDBG(x)
+#define WRTDBG(x)
+#endif
 const PROGMEM char mainpage[]= {"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"><html><head><title> Stranka 1</title></head><body>Ahoj<form action=\"/wtf\"><input type=\"submit\" name=\"do\" value=\"zhasni\"><input type=\"submit\" name=\"do\" value=\"rozsvit\"></form> </body></html>"};
 
 typedef enum{
@@ -44,13 +51,15 @@ void setup() {
   debugSer.println(F("AT+CIPSERVER=1,80"));
   esp8266Ser.println(F("AT+CIPSERVER=1,80"));
   waitFor("OK");
+  PRTDBG("Zkouska makra PRTDBG");
   digitalWrite(7, LOW);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  getRxID();
-  printHtml();
+  //getRxID();
+  //printHtml();
+  htmlMonitor();
 }
 
 void getRxID(void)
@@ -192,15 +201,13 @@ void printHtml()
   }
 }
 
-int findString(const char* string)
+int findString(const char* string, char recChar)
 {
-  char dataByte;
   static int idx = 0;
 
-  if(esp8266Ser.available())
+  if(recChar != '\0')
   {
-    dataByte = esp8266Ser.read();
-    if(dataByte == string[idx])
+    if(recChar == string[idx])
     {
       idx++;
       if(string[idx] == '\0') 
@@ -217,199 +224,195 @@ int findString(const char* string)
   return 0;
 }
 
-void htmlListener(void)
+void htmlMonitor(void)
 {
-  char dataByte;
-  static char state = 1;
+  //rx-----------------------------------------------
+  char dataByte; //nacteny znak
+  static int state = 1;//stav prijmu
+  static int rxch = 0;//index nacteneho znaku
+  static char pageUrl[80];//jmeno pozadovane stranky v GET
+  static int urlIdx = 0;//index zapisu do pole
+  //tx-----------------------------------------------
+  static unsigned long lastTime;//cas uplynuly od posledniho vysilani skupiny znaku
+  static int client;
+  static int rxLength;
+  static const char* htmlPage = NULL;
+  static int htmlSize;
+  static int txch = -3; //index aktualne vysilaneho znaku
+  //obecne-------------------------------------------
+  String page;
   int idx;
-  String page = "H:";
-
+  
+  //nacteni byte
+  if(esp8266Ser.available())
+  {
+    dataByte = esp8266Ser.read();
+    rxch++; //pocet prectenych znaku zvysit o 1
+    WRTDBG(dataByte);
+    //PRTDBG("Obdrzen znak:");
+    //PRTDBG(dataByte);
+    //PRTDBG("stav");
+    //PRTDBG(state);
+    //PRTDBG("index vysilani");
+    //PRTDBG(txch);
+    //PRTDBG("index prijmu");
+    //PRTDBG(rxch);
+  }
+  else
+  {
+    dataByte = '\0';
+  }
+  //RX------------------------------------------------------
   switch(state)
   {
     case 1:
-      if(findString("+IPD,")) state = 2;
+      if(findString("+IPD,", dataByte))
+      {
+        state = 2;
+        //PRTDBG("Obdrzen prijem")
+      }
       break;
     case 2:
-      if(esp8266Ser.available())
+      if(dataByte != '\0')
       {
-        dataByte = esp8266Ser.read();
-        htmlReq.client = dataByte - 48;
+        client = dataByte - 48;
         state = 3;
       }
       break;
     case 3://cteni carky
-      if(esp8266Ser.available())
+      if(dataByte != '\0')
       {
-        dataByte = esp8266Ser.read();
+        rxLength = 0; //vynulovani poctu prichozich byte
         state = 4;
       }
       break;
     case 4://pocet prichozich byte
-      if(esp8266Ser.available())
+      if(dataByte != '\0')
       {
-        dataByte = esp8266Ser.read();
         if(dataByte == ':')
         {
+          rxch = 0; //vynulovani poctu nactenych znaku
           state = 5;
         }
-        else if(dataByte != '\0');
+        else
         {
           dataByte -= 48;
-          htmlReq.rxLength = 10 * htmlReq.rxLength + dataByte;
-          dataByte = '\0';
+          rxLength = 10 * rxLength + dataByte;
         }
       }
       break;
     case 5://cekani na GET
-      if(findString("GET ")) state = 6;
+      if(findString("GET ", dataByte))
+      {
+        urlIdx = 0;
+        state = 6;
+      }
+      else if(rxch > 5) //nenalezeno GET
+      {
+        state = 7;
+      }
       break;
     case 6://cteni jmena stranky
-      if(esp8266Ser.available())
+      if(dataByte != '\0')
       {
-        dataByte = esp8266Ser.read();
         if(dataByte == ' ')
         {
+          pageUrl[urlIdx] = '\0';
+          page = String(pageUrl);
+          //identifikace stranky
+          if(page == String("/favicon.ico")) 
+          {
+            htmlSize = sizeof(mainpage);
+            htmlPage = &mainpage[0];
+            txch = -2;
+          }
+          else if(page == String("/"))
+          {
+            htmlSize = sizeof(mainpage);
+            htmlPage = &mainpage[0];
+            txch = -2;
+          }
+          else if(page == String("/wtf?do=rozsvit"))
+          {
+            digitalWrite(7, HIGH);
+            htmlSize = sizeof(mainpage);
+            htmlPage = &mainpage[0];
+            txch = -2;
+          }
+          else if(page == String("/wtf?do=zhasni")) 
+          {
+            digitalWrite(7, LOW);
+            htmlSize = sizeof(mainpage);
+            htmlPage = &mainpage[0];
+            txch = -2;
+          }
+          else 
+          {
+            htmlSize = sizeof(mainpage);
+            htmlPage = &mainpage[0];
+            txch = -2;
+          }
+          //PRTDBG("Stranka:");
+          //PRTDBG(page);
+          //PRTDBG("Index znaku stranky")
+          //PRTDBG(txch);
+          //PRTDBG("Pocet vycitanych znaku");
+          //PRTDBG(rxLength);
           state = 7;
         }
-        else if(dataByte != '\0');
+        else
         {
-          page += String(dataByte);
+          pageUrl[urlIdx] = dataByte;
+          if(urlIdx < 79) urlIdx++;
         }
       }
       break;
     case 7://vycteni zbytku bufferu
+      if(rxch >= (rxLength))
+      {
+        state = 1;
+      }
       break;
     default:
       state = 1;
       break;
   }
-  dataByte = '\0';
-  if(findString("+IPD,"))
-  {
-    
-  }
-  waitFor("+IPD,");
-  while(esp8266Ser.available() < 2 );
-  dataByte = esp8266Ser.read();
-  debugSer.write(dataByte);
-  htmlReq.client = dataByte - 48;
-  dataByte = esp8266Ser.read();//carka
-  debugSer.write(dataByte);
-  //pocet prichozich byte
-  dataByte = '\0';
-  htmlReq.rxLength = 0;
-  while(dataByte != ':')
-  {
-    if(dataByte != '\0')
-    {
-      dataByte -= 48;
-      htmlReq.rxLength = 10 * htmlReq.rxLength + dataByte;
-      dataByte = '\0';
-    }
-    else if(esp8266Ser.available())
-    {
-      dataByte = esp8266Ser.read();
-      debugSer.write(dataByte);
-    }
-  }
-  idx = 4;
-  waitFor("GET ");
-  dataByte = '\0';
-  while(dataByte != ' ')
-  {
-    if(dataByte != '\0')
-    {
-      page += String(dataByte);
-      dataByte = '\0';
-    }
-    else if(esp8266Ser.available())
-    {
-      dataByte = esp8266Ser.read();
-      debugSer.write(dataByte);
-      idx++;
-    }
-  }
-  debugSer.print("\nKonec identifikace stranky: ");
-  debugSer.println(page);
-  //identifikace stranky
-  if(page == String("H:/favicon.ico")) htmlReq.page = FAVICON;
-  else if(page == String("H:/")) htmlReq.page = MAINPAGE;
-  else if(page == String("H:/wtf?do=rozsvit"))
-  {
-    digitalWrite(7, HIGH);
-    htmlReq.page = MAINPAGE;
-  }
-  else if(page == String("H:/wtf?do=zhasni")) 
-  {
-    digitalWrite(7, LOW);
-    htmlReq.page = MAINPAGE;
-  }
-  else htmlReq.page = NA;
-  //zbytek vypsat na konzoli
-  debugSer.print("Vypisovani ");
-  debugSer.print(htmlReq.rxLength);
-  debugSer.println(" znaku:");
-  while(idx < htmlReq.rxLength) 
-  {
-    if(esp8266Ser.available())
-    {
-      dataByte = esp8266Ser.read();
-      debugSer.write(dataByte);
-      idx++;
-    }
-  }
-  debugSer.print("\nKonec cteni znaku\n\n");
-}
 
-void htmlSender(void)
-{
-  static unsigned long lastTime;
-  char dataByte;
-  const char *page;
-  int  sizeOfPage;
-  int idx;
-  
-  switch(htmlReq.page)
+  //TX------------------------------------------------------
+  if(txch == -2 && state == 1) //nove vysilani
   {
-    case FAVICON:
-      break;
-    case MAINPAGE:
-      page = &mainpage[0];
-      sizeOfPage = sizeof(mainpage);
-      break;
-    default:
-      break;
-  }
-  if(htmlReq.txch == -2) //nove vysilani
-  {
-    esp8266Ser.print("AT+CIPSEND=");
-    esp8266Ser.print(htmlReq.client);
+    esp8266Ser.print(F("AT+CIPSEND="));
+    esp8266Ser.print(client);
     esp8266Ser.print(',');
-    esp8266Ser.print(sizeOfPage);
-    htmlReq.txch = -1; //ocekavani odpovedi od ESP8266
+    esp8266Ser.println(htmlSize);
+    PRTDBG("Vysilani");
+    txch = -1; //ocekavani odpovedi od ESP8266
+    lastTime = millis(); //aktualizace casu
   }
-  else if(htmlReq.txch == -1) //ocekavani povoleni vzsilani od ESP8266
+  else if(txch == -1) //ocekavani povoleni vysilani od ESP8266
   {
-    if(esp8266Ser.available())
+    if(dataByte == '>') 
     {
-      dataByte = esp8266Ser.read();
-      if(dataByte == '>') 
-      {
-        htmlReq.txch = 0; //vysilani prvniho znaku
-        lastTime = millis(); //aktualizace casu
-      }
+      PRTDBG("Znak >");
+      txch = 0; //vysilani prvniho znaku
+      lastTime = millis(); //aktualizace casu
+    }
+    else if((millis() - lastTime) >= 2000)//opakovane vysilani
+    {
+      txch = -2;
     }
   }
-  else if(htmlReq.txch >= 0)//vysilani retezce v jednotlivych intervalech po ESP8266CHARCT znacich
+  else if(txch >= 0)//vysilani retezce v jednotlivych intervalech po ESP8266CHARCT znacich
   {
     if((millis() - lastTime) > ESP8266TXPER)
     {
       lastTime = millis(); //aktualizace casu
-      for(idx = 0; idx < ESP8266CHARCT && page[htmlReq.txch] != '\0'; idx++, htmlReq.txch++)
+      for(idx = 0; idx < ESP8266CHARCT && htmlPage[txch] != '\0'; idx++, txch++)
       {
-        esp8266Ser.write(page[htmlReq.txch]);
+        esp8266Ser.write(htmlPage[txch]);
+        WRTDBG(htmlPage[txch]);
       }
-      if(page[htmlReq.txch] == '\0') htmlReq.txch = -3; //konec vysilani
+      if(htmlPage[txch] == '\0') txch = -3; //konec vysilani
     }
   }
 }
