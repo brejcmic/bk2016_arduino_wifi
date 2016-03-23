@@ -1,22 +1,26 @@
 #include <SoftwareSerial.h>
+#include <avr/pgmspace.h>
 
 SoftwareSerial softSerial(10, 11); // RX, TX
 
 #define esp8266Ser  softSerial
 #define ESP8266SPEED  9600// cilova rzchlost kolmunikace
 #define ESP8266CHARCT 20// pocet najednou odesilanych znaku
-#define ESP8266TXPER  50// perioda vysilani v ms
+#define ESP8266TXPER  10// perioda vysilani v ms
 
 #define DEBUG       1
 #define debugSer    Serial
 #if DEBUG == 1
-#define PRTDBG(x)   debugSer.println(x);
-#define WRTDBG(x)   debugSer.write(x);
+#define PRTDBG(x)   debugSer.println(F(x)) //jen pro hlaseni
+#define WRTDBG(x)   debugSer.write(x) //bez konverze
+#define WRCDBG(x)   debugSer.print(x) //s konverzi
 #else
 #define PRTDBG(x)
 #define WRTDBG(x)
+#define WRCDBG(x)
 #endif
-const PROGMEM char mainpage[]= {"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"><html><head><title> Stranka 1</title></head><body>Ahoj<form action=\"/wtf\"><input type=\"submit\" name=\"do\" value=\"zhasni\"><input type=\"submit\" name=\"do\" value=\"rozsvit\"></form> </body></html>"};
+
+const char mainpage[] PROGMEM = {"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"><html><head><title> Stranka 1</title></head><body>Ahoj<form action=\"/wtf\"><input type=\"submit\" name=\"do\" value=\"zhasni\"><input type=\"submit\" name=\"do\" value=\"rozsvit\"></form> </body></html>"};
 
 typedef enum{
   NA, FAVICON, MAINPAGE
@@ -228,11 +232,12 @@ void htmlMonitor(void)
 {
   //rx-----------------------------------------------
   char dataByte; //nacteny znak
-  static int state = 1;//stav prijmu
+  static int rxState = 1;//stav prijmu
   static int rxch = 0;//index nacteneho znaku
   static char pageUrl[80];//jmeno pozadovane stranky v GET
   static int urlIdx = 0;//index zapisu do pole
   //tx-----------------------------------------------
+  static int txState = 1;//stav vysilani
   static unsigned long lastTime;//cas uplynuly od posledniho vysilani skupiny znaku
   static int client;
   static int rxLength;
@@ -241,6 +246,7 @@ void htmlMonitor(void)
   static int txch = -3; //index aktualne vysilaneho znaku
   //obecne-------------------------------------------
   String page;
+  String headPage;
   int idx;
   
   //nacteni byte
@@ -249,41 +255,32 @@ void htmlMonitor(void)
     dataByte = esp8266Ser.read();
     rxch++; //pocet prectenych znaku zvysit o 1
     WRTDBG(dataByte);
-    //PRTDBG("Obdrzen znak:");
-    //PRTDBG(dataByte);
-    //PRTDBG("stav");
-    //PRTDBG(state);
-    //PRTDBG("index vysilani");
-    //PRTDBG(txch);
-    //PRTDBG("index prijmu");
-    //PRTDBG(rxch);
   }
   else
   {
     dataByte = '\0';
   }
   //RX------------------------------------------------------
-  switch(state)
+  switch(rxState)
   {
     case 1:
       if(findString("+IPD,", dataByte))
       {
-        state = 2;
-        //PRTDBG("Obdrzen prijem")
+        rxState = 2;
       }
       break;
     case 2:
       if(dataByte != '\0')
       {
         client = dataByte - 48;
-        state = 3;
+        rxState = 3;
       }
       break;
     case 3://cteni carky
       if(dataByte != '\0')
       {
         rxLength = 0; //vynulovani poctu prichozich byte
-        state = 4;
+        rxState = 4;
       }
       break;
     case 4://pocet prichozich byte
@@ -292,7 +289,8 @@ void htmlMonitor(void)
         if(dataByte == ':')
         {
           rxch = 0; //vynulovani poctu nactenych znaku
-          state = 5;
+          rxState = 5;
+          //PRTDBG("\nObdrzen pocet byte");
         }
         else
         {
@@ -305,11 +303,12 @@ void htmlMonitor(void)
       if(findString("GET ", dataByte))
       {
         urlIdx = 0;
-        state = 6;
+        rxState = 6;
       }
       else if(rxch > 5) //nenalezeno GET
       {
-        state = 7;
+        //PRTDBG("\nObdrzeno GET");
+        rxState = 7;
       }
       break;
     case 6://cteni jmena stranky
@@ -352,13 +351,11 @@ void htmlMonitor(void)
             htmlPage = &mainpage[0];
             txch = -2;
           }
-          //PRTDBG("Stranka:");
-          //PRTDBG(page);
-          //PRTDBG("Index znaku stranky")
-          //PRTDBG(txch);
-          //PRTDBG("Pocet vycitanych znaku");
-          //PRTDBG(rxLength);
-          state = 7;
+          PRTDBG("\nIdentifikace stranky dokoncena");
+          PRTDBG("\nPocet vycitanych znaku: ");
+          WRCDBG(rxLength - rxch);
+          WRCDBG('\n');
+          rxState = 7;
         }
         else
         {
@@ -370,50 +367,75 @@ void htmlMonitor(void)
     case 7://vycteni zbytku bufferu
       if(rxch >= (rxLength))
       {
-        state = 1;
+        rxState = 1;
+        PRTDBG("\nBuffer uvolnen");
       }
       break;
     default:
-      state = 1;
+      rxState = 1;
       break;
   }
 
   //TX------------------------------------------------------
-  if(txch == -2 && state == 1) //nove vysilani
+  switch(txState)
   {
-    esp8266Ser.print(F("AT+CIPSEND="));
-    esp8266Ser.print(client);
-    esp8266Ser.print(',');
-    esp8266Ser.println(htmlSize);
-    PRTDBG("Vysilani");
-    txch = -1; //ocekavani odpovedi od ESP8266
-    lastTime = millis(); //aktualizace casu
-  }
-  else if(txch == -1) //ocekavani povoleni vysilani od ESP8266
-  {
-    if(dataByte == '>') 
-    {
-      PRTDBG("Znak >");
-      txch = 0; //vysilani prvniho znaku
-      lastTime = millis(); //aktualizace casu
-    }
-    else if((millis() - lastTime) >= 2000)//opakovane vysilani
-    {
-      txch = -2;
-    }
-  }
-  else if(txch >= 0)//vysilani retezce v jednotlivych intervalech po ESP8266CHARCT znacich
-  {
-    if((millis() - lastTime) > ESP8266TXPER)
-    {
-      lastTime = millis(); //aktualizace casu
-      for(idx = 0; idx < ESP8266CHARCT && htmlPage[txch] != '\0'; idx++, txch++)
+    case 1: //idle
+      if(txch == -2 && rxState == 1)
       {
-        esp8266Ser.write(htmlPage[txch]);
-        WRTDBG(htmlPage[txch]);
+        headPage = String("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: ");
+        headPage += String(htmlSize-1);
+        headPage += String("\r\n\r\n");
+        esp8266Ser.print(F("AT+CIPSEND="));
+        esp8266Ser.print(client);
+        esp8266Ser.print(',');
+        esp8266Ser.println(htmlSize + headPage.length()-1);
+        PRTDBG("Vysilani");
+        txch = -1; //ocekavani odpovedi od ESP8266
+        txState = 2;
       }
-      if(htmlPage[txch] == '\0') txch = -3; //konec vysilani
-    }
+      break;
+    case 2: //cekani na znak vysilani
+      if(dataByte == '>') 
+      {
+        txState = 3;
+      }
+      break;
+    case 3: //odesilani hlavicky
+      headPage = String("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: ");
+      headPage += String(htmlSize-1);
+      headPage += String("\r\n\r\n");
+      esp8266Ser.print(headPage);
+      WRCDBG(headPage);
+      txch = 0; //vysilani prvniho znaku
+      txState = 4;
+      lastTime = millis(); //aktualizace casu
+      break;
+    case 4:
+      if((millis() - lastTime) > ESP8266TXPER)
+      {
+        WRTDBG("\ntxch: ");
+        WRCDBG(txch);
+        WRTDBG("\n");
+        dataByte = pgm_read_byte_near(mainpage + txch);
+        for(idx = 0; idx < ESP8266CHARCT && dataByte != '\0'; idx++)
+        {
+          esp8266Ser.write(dataByte);
+          WRTDBG(dataByte);
+          txch++;
+          dataByte = pgm_read_byte_near(mainpage + txch);
+        }
+        if(dataByte == '\0') 
+        {
+          txch = -3; //konec vysilani hlavicky
+          txState = 1;
+          PRTDBG("\n\nVse odeslano");
+        }
+        lastTime = millis(); //aktualizace casu
+      }
+      break;
+    default:
+      txState = 1;
+      break;
   }
 }
 
