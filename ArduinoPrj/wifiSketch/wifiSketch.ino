@@ -7,12 +7,12 @@ SoftwareSerial softSerial(10, 11); // RX, TX
 #define ESP8266SPEED  9600// cilova rzchlost kolmunikace
 #define ESP8266CHARCT 20// pocet najednou odesilanych znaku
 #define ESP8266TXPER  10// perioda vysilani v ms
-
-#define ESPTCK(x,y)     ((x-y) >= ESP8266TXPER)
-#define ESPTCKSYNC(x,y) (y = x)
+#define COM_WATCHDOG_TIME   3000// cas v ms, po kterem se resetuje stav RX
+#define COM_URL_LENGTH 80 //maximalni delka retezce URL
 
 #define DEBUG       1
 #define debugSer    Serial
+
 #if DEBUG == 1
 #define PRTDBG(x)   debugSer.println(F(x)) //jen pro hlaseni
 #define WRTDBG(x)   debugSer.write(x) //bez konverze
@@ -23,10 +23,11 @@ SoftwareSerial softSerial(10, 11); // RX, TX
 #define WRCDBG(x)
 #endif
 
+const char headhttp[] = {"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: "};//nechat v ramce
 const char mainpage[] PROGMEM = {"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"><html><head><title>Aquaduino</title><link href=\"data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQEAYAAABPYyMiAAAABmJLR0T///////8JWPfcAAAACXBIWXMAAABIAAAASABGyWs+AAAAF0lEQVRIx2NgGAWjYBSMglEwCkbBSAcACBAAAeaR9cIAAAAASUVORK5CYII=\" rel=\"icon\" type=\"image/x-icon\" /></head><body>Ahoj<form action=\"/wtf\"><input type=\"submit\" name=\"do\" value=\"zhasni\"><input type=\"submit\" name=\"do\" value=\"rozsvit\"></form> </body></html>"};
 
 typedef enum{
-  WAITTX, ACKTX, HEADTX, MAINPAGETX, FAVICONTX, ONBUTTX, OFFBUTTX
+  WAITTX, REQSNDPGTX, ACKPGTX, HEADTX, MAINPAGETX, FAVICONTX, ONBUTTX, OFFBUTTX
 }txStates_t;
 
 typedef enum{
@@ -86,10 +87,10 @@ void setup() {
 }
 
 void loop() {
-  htmlMonitor();
+  com_monitor();
 }
 
-int findString(const char* string, char recChar)
+int com_findString(const char* string, char recChar)
 {
   static int idx = 0;
 
@@ -109,26 +110,39 @@ int findString(const char* string, char recChar)
   return 0;
 }
 
-void htmlMonitor(void)
+unsigned int com_delay(unsigned long timeDelay)
+{
+  static unsigned long lastTime;
+  unsigned long currTime;
+  unsigned int ret;
+  
+  currTime = millis();
+  ret = ((currTime - lastTime) >= timeDelay);
+  if(ret)
+  {
+    lastTime = currTime;
+  }
+  return ret;
+}
+
+void com_monitor(void)
 {
   //rx-----------------------------------------------
-  char dataByte; //nacteny znak
   static rxStates_t rxState = WAITRX;//stav prijmu
-  static int rxLength; //pocet prijatych byte
+  static int rxLength; //pocet prijatych byte (tachometr)
   static int rxch = 0;//index nacteneho znaku
-  static char pageUrl[80];//jmeno pozadovane stranky v GET
+  static char pageUrl[COM_URL_LENGTH];//jmeno pozadovane stranky v GET
   static int urlIdx = 0;//index zapisu do pole
   //tx-----------------------------------------------
   static txStates_t txState = WAITTX;//stav vysilani
-  static unsigned long lastTime;//cas uplynuly od posledniho vysilani skupiny znaku
+  static txStates_t reqState = WAITTX;//pozadovany stav vysilani dle prijmu
+  static txStates_t ackState = WAITTX;//stav pro vysilani po obdrzeni znaku ">"
   static int client; //klient
-  static txStates_t htmlPage = WAITTX;//typ html stranky je stejny jako jeden ze stavu TX
-  static int htmlSize;
-  static int txch = -3; //index aktualne vysilaneho znaku
+  static int txch = 0; //index aktualne vysilaneho znaku
   //obecne-------------------------------------------
-  String page;
-  String headPage;
-  int idx;
+  char dataByte; //nacteny nebo vysilany znak
+  String page; //prijaty retezec retezec pro vysilani
+  int idx; //index pro cyklus for
 
   //RX------------------------------------------------------
   //nacteni byte
@@ -140,30 +154,31 @@ void htmlMonitor(void)
     switch(rxState)
     {
       case WAITRX:
-        if(findString("+IPD,", dataByte))
+        if(com_findString("+IPD,", dataByte))
         {
-          PRTDBG("\nPrijem zpravy detekovan");
-          rxState = CLIENTRX;
+          rxState = CLIENTRX;//zaznamenan prijem
         }
-        if(dataByte == '>' && txState == ACKTX) 
+        if(dataByte == '>' && txState == ACKPGTX)
         {
-          PRTDBG("\nVysilani povoleno");
-          txState = HEADTX;
+            txState = ackState;//vysilani je povoleno
         }
         break;
+        
       case CLIENTRX://identifikace klienta
         client = dataByte - 48;
         rxState = COMMARX;
         break;
+        
       case COMMARX://cteni carky
         rxLength = 0; //vynulovani poctu prichozich byte
         rxState = BYTECNTRX;
         break;
+        
       case BYTECNTRX://pocet prichozich byte
         if(dataByte == ':')
         {
           rxch = 0; //vynulovani poctu nactenych znaku
-          if(htmlPage != WAITTX) //kdyz uz probiha zpracovani html
+          if(reqState != WAITTX) //kdyz uz probiha zpracovani html
           {
             rxState = FLUSHRX;
           }
@@ -178,8 +193,9 @@ void htmlMonitor(void)
           rxLength = 10 * rxLength + dataByte;
         }
         break;
+        
       case REQRX://cekani na GET
-        if(findString("GET ", dataByte))
+        if(com_findString("GET ", dataByte))
         {
           urlIdx = 0;
           rxState = URLRX;
@@ -189,6 +205,7 @@ void htmlMonitor(void)
           rxState = FLUSHRX;
         }
         break;
+        
       case URLRX://cteni jmena stranky
         if(dataByte == ' ')
         {
@@ -197,41 +214,35 @@ void htmlMonitor(void)
           //identifikace stranky
           if(page == String("/favicon.ico")) 
           {
-            htmlSize = sizeof(mainpage)-1;
-            htmlPage = MAINPAGETX;
+            reqState = REQSNDPGTX;
           }
           else if(page == String("/"))
           {
-            htmlSize = sizeof(mainpage)-1;
-            htmlPage = MAINPAGETX;
+            reqState = REQSNDPGTX;
           }
           else if(page == String("/wtf?do=rozsvit"))
           {
-            htmlSize = sizeof(mainpage)-1;
-            htmlPage = ONBUTTX;
+            reqState = ONBUTTX;
           }
           else if(page == String("/wtf?do=zhasni")) 
           {
-            htmlSize = sizeof(mainpage)-1;
-            htmlPage = OFFBUTTX;
+            reqState = OFFBUTTX;
           }
           else 
           {
-            htmlSize = sizeof(mainpage);
-            htmlPage = MAINPAGETX;
+            reqState = WAITTX;
           }
-          PRTDBG("\nIdentifikace stranky dokoncena");
-          PRTDBG("\nPocet vycitanych znaku: ");
-          WRCDBG(rxLength - rxch);
-          WRCDBG('\n');
+          
           rxState = FLUSHRX;
         }
         else
         {
           pageUrl[urlIdx] = dataByte;
-          if(urlIdx < 79) urlIdx++;
+          if(urlIdx < (COM_URL_LENGTH-1)) urlIdx++;
+          else rxState = FLUSHRX; //stranku nelze identifikovat
         }
         break;
+        
       case FLUSHRX://vycteni zbytku bufferu
         if(rxch >= (rxLength))
         {
@@ -239,74 +250,94 @@ void htmlMonitor(void)
           PRTDBG("\nBuffer uvolnen");
         }
         break;
+        
       default:
         rxState = WAITRX;
         break;
     }
   }
+  
   //TX------------------------------------------------------
   switch(txState)
   {
     case WAITTX: //idle
-      if(htmlPage != WAITTX && rxState == WAITRX)
+      if(rxState == WAITRX)//RX musi byt v klidu
       {
-        headPage = String("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: ");
-        headPage += String(htmlSize);
-        headPage += String("\r\n\r\n");
-        esp8266Ser.print(F("AT+CIPSEND="));
-        esp8266Ser.print(client);
-        esp8266Ser.print(',');
-        esp8266Ser.println(htmlSize + headPage.length());
-        PRTDBG("\nPozadavek vysilani");
-        txch = -1; //ocekavani odpovedi od ESP8266
-        txState = ACKTX;
+        com_delay(0);//znovunastaveni casu
+        txState = reqState;
+      }
+      else if(com_delay(COM_WATCHDOG_TIME))//WATCHDOG FOR RX
+      {
+        rxState = WAITRX;
       }
       break;
-    case ACKTX: //ocekavani prijmu znaku pro povoleni vysilani
+      
+    case REQSNDPGTX://pozadovano vzsilani hlavni stranky
+      page = String(headhttp);
+      page += String((sizeof(mainpage)-1));
+      page += String("\r\n\r\n");
+      esp8266Ser.print(F("AT+CIPSEND="));
+      esp8266Ser.print(client);
+      esp8266Ser.print(',');
+      esp8266Ser.println((sizeof(mainpage)-1) + page.length());
+      ackState = HEADTX; //po obdrzeni potvrzeni vysilani skocit do vysilani hlavicky
+      txState = ACKPGTX;
       break;
-    case HEADTX: //odesilani hlavicky
-      headPage = String("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: ");
-      headPage += String(htmlSize);
-      headPage += String("\r\n\r\n");
-      esp8266Ser.print(headPage);
-      WRCDBG(headPage);
-      txch = 0; //vysilani prvniho znaku
-      txState = htmlPage;
-      ESPTCKSYNC(millis(),lastTime);//aktualizace casu
-      break;
-    case MAINPAGETX:
-      if(ESPTCK(millis(),lastTime))
+      
+    case ACKPGTX: //ocekavani prijmu znaku ">" pro povoleni vysilani
+      if(rxState != WAITRX)//chyba, modul prijima jina data a prikaz je treba zrusit
       {
-        WRTDBG("\ntxch: ");
-        WRCDBG(txch);
-        WRTDBG("\n");
+        esp8266Ser.println(F("+++"));//Tato sekvence rusi odesilani
+        txState = WAITTX;
+      }
+      break;
+      
+    case HEADTX: //odesilani hlavicky
+      page = String(headhttp);
+      page += String((sizeof(mainpage)-1));
+      page += String("\r\n\r\n");
+      esp8266Ser.print(page);
+      txch = 0; //vysilani prvniho znaku
+      com_delay(0);//synchronizace casu
+      txState = MAINPAGETX;
+      WRCDBG(page);
+      break;
+      
+    case MAINPAGETX:
+      if(com_delay(ESP8266TXPER))
+      {
         dataByte = pgm_read_byte_near(mainpage + txch);
         for(idx = 0; idx < ESP8266CHARCT && dataByte != '\0'; idx++)
         {
-          esp8266Ser.write(dataByte);
           WRTDBG(dataByte);
+          esp8266Ser.write(dataByte);
           txch++;
           dataByte = pgm_read_byte_near(mainpage + txch);
         }
         if(dataByte == '\0') 
         {
-          htmlPage = WAITTX;
+          reqState = WAITTX;
           txState = WAITTX;
+          com_delay(0);//synchronizace casu
           PRTDBG("\n\nVse odeslano");
         }
       }
       break;
+      
     case ONBUTTX:
       digitalWrite(7, HIGH);
-      txState = MAINPAGETX;
+      txState = REQSNDPGTX;
       break;
+      
     case OFFBUTTX:
       digitalWrite(7, LOW);
-      txState = MAINPAGETX;
+      txState = REQSNDPGTX;
       break;
+      
     default:
-      htmlPage = WAITTX;
+      reqState = WAITTX;
       txState = WAITTX;
+      ackState = WAITTX;
       break;
   }
 }
