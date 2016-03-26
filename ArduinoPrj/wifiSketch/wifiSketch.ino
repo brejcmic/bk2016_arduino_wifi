@@ -90,24 +90,36 @@ void loop() {
   com_monitor();
 }
 
-int com_findString(const char* string, char recChar)
+//Funkce hleda retezec v poslednich 8 prijatych znacich
+//Pokud nema byt pridan znak do fifa, je treba predat znak "\0"
+int com_findString(const char* cArr, char recChar)
 {
-  static int idx = 0;
+  static char fifo[8]; //fifo poslednich 8 znaku
+  static unsigned int idxf = 0; //index fifa
+  unsigned int j; //index znaku v retezci
+  unsigned int i; //index index znaku ve fifo
 
-  if(recChar == string[idx])
+  //pridani znaku do fifa
+  if(recChar != '\0')
   {
-    idx++;
-    if(string[idx] == '\0') 
-    {
-      idx = 0;
-      return 1;
-    }
+    fifo[idxf] = recChar;
+    idxf++;
+    idxf &= 0x07;
   }
-  else
+  //zjisteni delky retezce
+  j = 0;
+  while(cArr[j] != '\0') j++;
+  if(j > 8 || j == 0) return 0;
+
+  //hledani retezce ve fifo
+  i = idxf;
+  while(j > 0 && (fifo[i] == cArr[--j]))
   {
-    idx = 0;
+    i--;
+    i &= 0x07;
   }
-  return 0;
+  if(j == 0) return 1;
+  else return 0;
 }
 
 unsigned int com_delay(unsigned long timeDelay)
