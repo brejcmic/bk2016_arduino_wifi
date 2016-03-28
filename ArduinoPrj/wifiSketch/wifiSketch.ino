@@ -13,7 +13,7 @@ SoftwareSerial softSerial(10, 11); // RX, TX
 #define COM_MSG_LEN   64 //delka kruhoveho bufferu pro ulozeni servisni zpravy, mocnina 2
 #define COM_MSG_MSK   COM_MSG_LEN-1 //maska pro pretekani indexu bufferu servisni zpravy
 
-#define DEBUG       0
+#define DEBUG       1
 #define debugSer    Serial
 
 #if DEBUG == 1
@@ -30,7 +30,6 @@ SoftwareSerial softSerial(10, 11); // RX, TX
 #define wrMsg(x)    debugSer.println(F(x)) //vypis zpravy
 #endif
 
-
 const char headhttp[] = {"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: "};//nechat v ramce
 const char mainpage[] PROGMEM = {"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"><html><head><title>Aquaduino</title><link href=\"data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQEAYAAABPYyMiAAAABmJLR0T///////8JWPfcAAAACXBIWXMAAABIAAAASABGyWs+AAAAF0lEQVRIx2NgGAWjYBSMglEwCkbBSAcACBAAAeaR9cIAAAAASUVORK5CYII=\" rel=\"icon\" type=\"image/x-icon\" /></head><body>Ahoj<form action=\"/wtf\"><input type=\"submit\" name=\"do\" value=\"zhasni\"><input type=\"submit\" name=\"do\" value=\"rozsvit\"></form> </body></html>"};
 
@@ -46,60 +45,142 @@ typedef enum{
   LOGSR, WAITSR, ATCOMMSR, ATSENDSR
 }srStates_t;
 
-void waitFor(const char* string)
+typedef struct
 {
-  char dataByte;
-  int idx;
-
-  debugSer.println("\nPrijato:");
-  idx = 0;
-  while(string[idx] != '\0') //pri chybe nekonecna smycka
-  {
-    if(esp8266Ser.available())
-    {
-      dataByte = esp8266Ser.read();
-      debugSer.write(dataByte);
-      if(dataByte == string[idx])
-      {
-        idx++;
-      }
-      else
-      {
-        idx = 0;
-      }
-    }
-  }
-  debugSer.print("\n\n");
-}
+  unsigned int Byte0;
+  unsigned int Byte1;
+  unsigned int Byte2;
+  unsigned int Byte3;
+  unsigned int Byte4;
+  unsigned int Byte5;
+}mac_t;
 
 void setup() {
   pinMode(7, OUTPUT);           // set pin to input
   digitalWrite(7, HIGH);
-  
-  debugSer.begin(115200, SERIAL_8N1);
-  esp8266Ser.begin(115200);
-  debugSer.println(F("AT+UART_CUR=9600,8,1,0,0"));
-  esp8266Ser.println(F("AT+UART_CUR=9600,8,1,0,0"));
-  delay(2000); //musi byt delay na prenastaveni
-  esp8266Ser.begin(ESP8266SPEED);
-  debugSer.println(F("AT"));
-  esp8266Ser.println(F("AT"));
-  waitFor("OK");
-  debugSer.println(F("AT+CIPMUX=1"));
-  esp8266Ser.println(F("AT+CIPMUX=1"));
-  waitFor("OK");
-  debugSer.println(F("AT+CWJAP=\"brejcmicDebug\",\"testwifi\""));
-  esp8266Ser.println(F("AT+CWJAP=\"brejcmicDebug\",\"testwifi\""));
-  waitFor("OK");
-  debugSer.println(F("AT+CIPSERVER=1,80"));
-  esp8266Ser.println(F("AT+CIPSERVER=1,80"));
-  waitFor("OK");
-  PRTDBG("Zkouska makra PRTDBG");
-  digitalWrite(7, LOW);
+  com_setupServisCh();
+  com_setupEsp8266();
 }
 
 void loop() {
   com_monitor();
+}
+
+unsigned int com_setupServisCh(void)
+{
+  //navazani komunikace servisni linky
+  //----------------------------------------------------
+  debugSer.begin(115200, SERIAL_8N1);
+  return 1;
+}
+
+unsigned int com_setupEsp8266()
+{
+  char rx[4];
+  char rxByte;
+  String atMsg;
+  int idx;
+  //navazani komunikace s esp8266
+  //----------------------------------------------------
+  esp8266Ser.begin(115200);
+  atMsg = String(F("AT+UART_CUR="));
+  atMsg += ESP8266SPEED;
+  atMsg += String(F(",8,1,0,0"));
+  esp8266Ser.println(atMsg);
+  wrMsg("\nInicializace komunikace s esp8266.");
+  rxByte = '*';
+  wrLog(rxByte, 1);
+  delay(1000);
+  wrLog(rxByte, 1);
+  delay(1000);
+  wrLog(rxByte, 1);
+  delay(1000);
+  wrLog(rxByte, 1);
+  delay(1000);
+  wrLog(rxByte, 1);
+  esp8266Ser.begin(ESP8266SPEED);
+  esp8266Ser.println(F("AT"));//pokus o navazani komunikace
+  com_delay(0); //reset casu
+  idx = 0;
+  while(!com_checkRxESP8266For("OK", rx, 4))
+  {
+    if(com_delay(1000))
+    {
+      idx++;
+      wrLog(rxByte, 1);
+    }
+    else if(idx > 2)
+    {
+      wrMsg("\n<X> esp8266 neodpovida.");
+      return 0;
+    }
+  }
+  wrMsg("\n<ok> Prijata odpoved od esp8266.");
+  //Komunikace navazana, nastaveni nasobneho pripojeni
+  //----------------------------------------------------
+  esp8266Ser.println(F("AT+CIPMUX=1"));
+  com_delay(0); //reset casu
+  while(!com_checkRxESP8266For("OK", rx, 4))
+  {
+    if(com_delay(1000))
+    {
+      wrMsg("\n<X> Nepodarilo se nastavit CIPMUX=1");
+      return 0;
+    }
+  }
+  //Pokus o pripojeni k wifi
+  //----------------------------------------------------
+  wrMsg("\nPripojovani k WIFI siti");
+  atMsg = String("AT+CWJAP_CUR=\"");
+  atMsg += String("brejcmicDebug");
+  atMsg += String("\",\"");
+  atMsg += String("testwifi");
+  atMsg += String("\"");
+  esp8266Ser.println(atMsg);//pokus o pripojeni k wifi
+  com_delay(0); //reset casu
+  idx = 0;
+  while(!com_checkRxESP8266For("OK", rx, 4))
+  {
+    if(com_delay(1000))
+    {
+      idx++;
+      wrLog(rxByte, 1);
+    }
+    else if(idx > 15)
+    {
+      wrMsg("\n<X> WIFI sit nedostupna.");
+      return 0;
+    }
+  }
+  //Nastavit zarizeni jako server
+  //----------------------------------------------------
+  esp8266Ser.println(F("AT+CIPSERVER=1,80"));//port 80
+  com_delay(0); //reset casu
+  while(!com_checkRxESP8266For("OK", rx, 4))
+  {
+    if(com_delay(1000))
+    {
+      wrMsg("\n<X> Nepodarilo se spustit server.");
+      return 0;
+    }
+  }
+  wrLog(rxByte, 1);
+  //Ziskani IP adresy
+  //----------------------------------------------------
+  wrMsg("\n<ok> Wifi pripojena.");
+}
+
+unsigned int com_checkRxESP8266For(const char* cArr, char *fifo, unsigned int flen)
+{
+  char dataByte;
+
+  if(esp8266Ser.available())
+  {
+    dataByte = esp8266Ser.read();
+    com_putCharInFifo(dataByte, fifo, flen);
+    return com_findInFifo(cArr, fifo, flen);
+  }
+  return 0;
 }
 
 //Funkce hleda retezec v poslednich flen prijatych znacich.
@@ -355,8 +436,8 @@ void com_monitor(void)
         dataByte = pgm_read_byte_near(mainpage + txch);
         for(idx = 0; idx < ESP8266CHARCT && dataByte != '\0'; idx++)
         {
-          WRTDBG(dataByte);
           esp8266Ser.write(dataByte);
+          wrLog(dataByte, (srState == LOGSR));
           txch++;
           dataByte = pgm_read_byte_near(mainpage + txch);
         }
