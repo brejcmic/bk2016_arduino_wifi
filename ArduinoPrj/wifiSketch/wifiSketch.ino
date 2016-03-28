@@ -4,16 +4,17 @@
 SoftwareSerial softSerial(10, 11); // RX, TX
 
 #define esp8266Ser  softSerial
-#define ESP8266SPEED  9600// cilova rzchlost kolmunikace
-#define ESP8266CHARCT 20// pocet najednou odesilanych znaku
-#define ESP8266TXPER  10// perioda vysilani v ms
+#define ESP8266SPEED        9600// cilova rzchlost kolmunikace
+#define ESP8266CHARCT       20// pocet najednou odesilanych znaku
+#define ESP8266TXPER        10// perioda vysilani v ms
+#define ESP8266PACKETLEN    1024 //maximalni velikost packetu v byte
 #define COM_WATCHDOG_TIME   3000// cas v ms, po kterem se resetuje stav RX
-#define COM_RX_LEN    32 //delka fifa pro prijem z esp8266
-#define COM_SR_LEN    8 //delka fifa pro prijem ze servisni linky
-#define COM_MSG_LEN   64 //delka kruhoveho bufferu pro ulozeni servisni zpravy, mocnina 2
-#define COM_MSG_MSK   COM_MSG_LEN-1 //maska pro pretekani indexu bufferu servisni zpravy
+#define COM_RX_LEN          32 //delka fifa pro prijem z esp8266
+#define COM_SR_LEN          8 //delka fifa pro prijem ze servisni linky
+#define COM_MSG_LEN         64 //delka kruhoveho bufferu pro ulozeni servisni zpravy, mocnina 2
+#define COM_MSG_MSK         COM_MSG_LEN-1 //maska pro pretekani indexu bufferu servisni zpravy
 
-#define DEBUG       1
+#define DEBUG       0
 #define debugSer    Serial
 
 #if DEBUG == 1
@@ -34,7 +35,7 @@ const char headhttp[] = {"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnecti
 const char mainpage[] PROGMEM = {"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"><html><head><title>Aquaduino</title><link href=\"data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQEAYAAABPYyMiAAAABmJLR0T///////8JWPfcAAAACXBIWXMAAABIAAAASABGyWs+AAAAF0lEQVRIx2NgGAWjYBSMglEwCkbBSAcACBAAAeaR9cIAAAAASUVORK5CYII=\" rel=\"icon\" type=\"image/x-icon\" /></head><body>Ahoj<form action=\"/wtf\"><input type=\"submit\" name=\"do\" value=\"zhasni\"><input type=\"submit\" name=\"do\" value=\"rozsvit\"></form> </body></html>"};
 
 typedef enum{
-  WAITTX, REQSNDPGTX, ACKPGTX, HEADTX, MAINPAGETX, FAVICONTX, ONBUTTX, OFFBUTTX
+  WAITTX, REQSNDPGTX, ACKTX, HEADTX, MAINPAGETX, FAVICONTX, NEXTPACKTTX, ATSENDTX, ONBUTTX, OFFBUTTX
 }txStates_t;
 
 typedef enum{
@@ -165,7 +166,7 @@ unsigned int com_setupEsp8266()
     }
   }
   wrLog(rxByte, 1);
-  //Ziskani IP adresy
+  //Vse ok
   //----------------------------------------------------
   wrMsg("\n<ok> Wifi pripojena.");
 }
@@ -257,7 +258,9 @@ void com_monitor(void)
   static txStates_t reqState = WAITTX;//pozadovany stav vysilani dle prijmu
   static txStates_t ackState = WAITTX;//stav pro vysilani po obdrzeni znaku ">"
   static int client; //klient
-  static int txch = 0; //index aktualne vysilaneho znaku
+  static unsigned long txch = 0; //index aktualne vysilaneho znaku
+  static unsigned long txpb; //hranice vysilaneho packetu v poctu byte
+  static unsigned long txlen; //celkova delka zpravy
   //servis-------------------------------------------
   static srStates_t srState = WAITSR;//stav servisni linky
   static char srFifo[COM_SR_LEN];//servisni fifo prijmu
@@ -284,7 +287,7 @@ void com_monitor(void)
           PRTDBG("\nPrijem");
           rxState = CLIENTRX;//zaznamenan prijem
         }
-        if(dataByte == '>' && txState == ACKPGTX)
+        if(dataByte == '>' && txState == ACKTX)
         {
             txState = ackState;//vysilani je povoleno
         }
@@ -403,15 +406,14 @@ void com_monitor(void)
       page = String(headhttp);
       page += String((sizeof(mainpage)-1));
       page += String("\r\n\r\n");
-      esp8266Ser.print(F("AT+CIPSEND="));
-      esp8266Ser.print(client);
-      esp8266Ser.print(',');
-      esp8266Ser.println((sizeof(mainpage)-1) + page.length());
+      txlen = page.length();
+      txpb = txlen; //delka paketu hlavicky zde neni omezena
+      txch = 0; //vysilani prvniho znaku paketu
       ackState = HEADTX; //po obdrzeni potvrzeni vysilani skocit do vysilani hlavicky
-      txState = ACKPGTX;
+      txState = ATSENDTX;
       break;
       
-    case ACKPGTX: //ocekavani prijmu znaku ">" pro povoleni vysilani
+    case ACKTX: //ocekavani prijmu znaku ">" pro povoleni vysilani
       if(rxState != WAITRX)//chyba, modul prijima jina data a prikaz je treba zrusit
       {
         esp8266Ser.println(F("+++"));//Tato sekvence rusi odesilani
@@ -424,31 +426,65 @@ void com_monitor(void)
       page += String((sizeof(mainpage)-1));
       page += String("\r\n\r\n");
       esp8266Ser.print(page);
+      //uprava delek o velikost odeslane hlavicky
+      txlen = sizeof(mainpage)-1;
+      txpb = 0;
       txch = 0; //vysilani prvniho znaku
       com_delay(0);//synchronizace casu
-      txState = MAINPAGETX;
+      reqState = MAINPAGETX;
+      txState = NEXTPACKTTX;
       WRCDBG(page);
       break;
       
     case MAINPAGETX:
       if(com_delay(ESP8266TXPER))
       {
-        dataByte = pgm_read_byte_near(mainpage + txch);
-        for(idx = 0; idx < ESP8266CHARCT && dataByte != '\0'; idx++)
+        for(idx = 0; idx < ESP8266CHARCT; idx++, txch++)
         {
-          esp8266Ser.write(dataByte);
-          wrLog(dataByte, (srState == LOGSR));
-          txch++;
-          dataByte = pgm_read_byte_near(mainpage + txch);
-        }
-        if(dataByte == '\0') 
-        {
-          reqState = WAITTX;
-          txState = WAITTX;
-          com_delay(0);//synchronizace casu
-          PRTDBG("\n\nVse odeslano");
+          if(txch >= txpb)
+          {
+            if(txch >= txlen) 
+            {
+              com_delay(0);//synchronizace casu
+              reqState = WAITTX;
+              txState = WAITTX;
+              PRTDBG("\n\nVse odeslano");
+            }
+            else
+            {
+              com_delay(0);//synchronizace casu
+              reqState = MAINPAGETX;
+              txState = NEXTPACKTTX;
+            }
+            break;
+          }
+          else
+          {
+            dataByte = pgm_read_byte_near(mainpage + txch);
+            wrLog(dataByte, (srState == LOGSR));
+            esp8266Ser.write(dataByte);
+          }
         }
       }
+      break;
+      
+    case NEXTPACKTTX:
+      if(com_delay(50)) //50 ms prodleva
+      {
+        txpb += ESP8266PACKETLEN;
+        if(txpb > txlen) txpb = txlen;
+        ackState = reqState; //po obdrzeni potvrzeni vysilani skocit do vysilani stranky
+        txState = ATSENDTX;
+        PRTDBG("\nNovy packet");
+      }
+      break;
+
+    case ATSENDTX:
+      esp8266Ser.print(F("AT+CIPSEND="));
+      esp8266Ser.print(client);
+      esp8266Ser.print(',');
+      esp8266Ser.println(txpb - txch);
+      txState = ACKTX;
       break;
       
     case ONBUTTX:
