@@ -17072,15 +17072,15 @@ Source: www.farnell.com/datasheets/247.pdf</description>
 <packages>
 <package name="ARDUINOR3">
 <description>The new Arduino R3 'classic' adds duplicate I2C pins and an IORef pin (and an unused pin</description>
-<wire x1="0" y1="0" x2="66.04" y2="0" width="0" layer="20"/>
-<wire x1="66.04" y1="0" x2="66.04" y2="2.54" width="0" layer="20"/>
-<wire x1="66.04" y1="2.54" x2="68.58" y2="5.08" width="0" layer="20"/>
-<wire x1="68.58" y1="5.08" x2="68.58" y2="37.846" width="0" layer="20"/>
-<wire x1="68.58" y1="37.846" x2="66.04" y2="40.386" width="0" layer="20"/>
-<wire x1="66.04" y1="40.386" x2="66.04" y2="51.816" width="0" layer="20"/>
-<wire x1="66.04" y1="51.816" x2="64.516" y2="53.34" width="0" layer="20"/>
-<wire x1="64.516" y1="53.34" x2="0" y2="53.34" width="0" layer="20"/>
-<wire x1="0" y1="53.34" x2="0" y2="0" width="0" layer="20"/>
+<wire x1="0" y1="0" x2="66.04" y2="0" width="0" layer="51"/>
+<wire x1="66.04" y1="0" x2="66.04" y2="2.54" width="0" layer="51"/>
+<wire x1="66.04" y1="2.54" x2="68.58" y2="5.08" width="0" layer="51"/>
+<wire x1="68.58" y1="5.08" x2="68.58" y2="37.846" width="0" layer="51"/>
+<wire x1="68.58" y1="37.846" x2="66.04" y2="40.386" width="0" layer="51"/>
+<wire x1="66.04" y1="40.386" x2="66.04" y2="51.816" width="0" layer="51"/>
+<wire x1="66.04" y1="51.816" x2="64.516" y2="53.34" width="0" layer="51"/>
+<wire x1="64.516" y1="53.34" x2="0" y2="53.34" width="0" layer="51"/>
+<wire x1="0" y1="53.34" x2="0" y2="0" width="0" layer="51"/>
 <circle x="15.24" y="50.8" radius="1.796" width="0.127" layer="51"/>
 <circle x="13.97" y="2.54" radius="1.796" width="0.127" layer="51"/>
 <circle x="66.04" y="35.56" radius="1.796" width="0.127" layer="51"/>

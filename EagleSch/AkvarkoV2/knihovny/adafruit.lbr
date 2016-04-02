@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE eagle SYSTEM "eagle.dtd">
-<eagle version="6.6.0">
+<eagle version="7.2.0">
 <drawing>
 <settings>
 <setting alwaysvectorfont="no"/>
 <setting verticaltext="up"/>
 </settings>
-<grid distance="0.1" unitdist="inch" unit="inch" style="lines" multiple="1" display="no" altdistance="0.01" altunitdist="inch" altunit="inch"/>
+<grid distance="0.05" unitdist="inch" unit="inch" style="lines" multiple="1" display="yes" altdistance="0.025" altunitdist="inch" altunit="inch"/>
 <layers>
 <layer number="1" name="Top" color="4" fill="1" visible="yes" active="yes"/>
 <layer number="2" name="Route2" color="1" fill="3" visible="no" active="yes"/>
@@ -21822,15 +21822,15 @@ diameter 2 mm, horizontal, grid 10.16 mm</description>
 </package>
 <package name="ARDUINOR3">
 <description>The new Arduino R3 'classic' adds duplicate I2C pins and an IORef pin (and an unused pin</description>
-<wire x1="0" y1="0" x2="66.04" y2="0" width="0" layer="20"/>
-<wire x1="66.04" y1="0" x2="66.04" y2="2.54" width="0" layer="20"/>
-<wire x1="66.04" y1="2.54" x2="68.58" y2="5.08" width="0" layer="20"/>
-<wire x1="68.58" y1="5.08" x2="68.58" y2="37.846" width="0" layer="20"/>
-<wire x1="68.58" y1="37.846" x2="66.04" y2="40.386" width="0" layer="20"/>
-<wire x1="66.04" y1="40.386" x2="66.04" y2="51.816" width="0" layer="20"/>
-<wire x1="66.04" y1="51.816" x2="64.516" y2="53.34" width="0" layer="20"/>
-<wire x1="64.516" y1="53.34" x2="0" y2="53.34" width="0" layer="20"/>
-<wire x1="0" y1="53.34" x2="0" y2="0" width="0" layer="20"/>
+<wire x1="0" y1="0" x2="66.04" y2="0" width="0" layer="51"/>
+<wire x1="66.04" y1="0" x2="66.04" y2="2.54" width="0" layer="51"/>
+<wire x1="66.04" y1="2.54" x2="68.58" y2="5.08" width="0" layer="51"/>
+<wire x1="68.58" y1="5.08" x2="68.58" y2="37.846" width="0" layer="51"/>
+<wire x1="68.58" y1="37.846" x2="66.04" y2="40.386" width="0" layer="51"/>
+<wire x1="66.04" y1="40.386" x2="66.04" y2="51.816" width="0" layer="51"/>
+<wire x1="66.04" y1="51.816" x2="64.516" y2="53.34" width="0" layer="51"/>
+<wire x1="64.516" y1="53.34" x2="0" y2="53.34" width="0" layer="51"/>
+<wire x1="0" y1="53.34" x2="0" y2="0" width="0" layer="51"/>
 <circle x="15.24" y="50.8" radius="1.796" width="0.127" layer="51"/>
 <circle x="13.97" y="2.54" radius="1.796" width="0.127" layer="51"/>
 <circle x="66.04" y="35.56" radius="1.796" width="0.127" layer="51"/>
