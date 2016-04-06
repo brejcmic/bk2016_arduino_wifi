@@ -3808,15 +3808,15 @@ design rules under a new name.</description>
 <element name="DS3231RTC" library="pinhead" package="1X04" value="" x="19.05" y="151.13"/>
 <element name="U1" library="adafruit" package="ARDUINOR3" value="ARDUINOR3-DIMENSION" x="36.83" y="160.02" rot="R270"/>
 <element name="LED1" library="led" package="LED3MM" value="2.2V 25mA" x="82.55" y="39.37" rot="R180"/>
-<element name="R22" library="rcl" package="R0805" value="390R" x="83.82" y="44.45" rot="MR270"/>
+<element name="R22" library="rcl" package="R0805" value="1k" x="83.82" y="44.45" rot="MR270"/>
 <element name="C10" library="resistor" package="E5-10,5" value="CE 1000u/35VIT" x="102.87" y="90.17" rot="MR180"/>
 <element name="IC3" library="linear" package="TO220H" value="LF33CV" x="104.14" y="72.39" rot="R270"/>
-<element name="C9" library="rcl" package="C1206K" value="100n" x="94.615" y="73.66" rot="MR270"/>
+<element name="C9" library="rcl" package="C1206K" value="330n" x="94.615" y="73.66" rot="MR270"/>
 <element name="C8" library="rcl" package="C1206K" value="100n" x="97.4725" y="70.8025" rot="MR90"/>
 <element name="U$5" library="holes" package="3,2" value="" x="109.855" y="154.94"/>
 <element name="IC2" library="40xx" package="DIL16" value="4051N" x="19.05" y="97.79" rot="R180"/>
 <element name="C11" library="rcl" package="C1206K" value="330n" x="21.59" y="104.14" rot="MR0"/>
-<element name="R23" library="rcl" package="R0805" value="4k7" x="101.6" y="116.84" rot="MR0"/>
+<element name="R23" library="rcl" package="R0805" value="1k" x="101.6" y="116.84" rot="MR0"/>
 <element name="R24" library="rcl" package="0207/15" value="4k7" x="76.2" y="77.47" rot="MR0"/>
 <element name="C12" library="rcl" package="C1206K" value="330n" x="35.56" y="101.6" rot="MR0"/>
 <element name="U$6" library="holes" package="3,2" value="" x="109.855" y="45.72"/>
@@ -3835,7 +3835,7 @@ design rules under a new name.</description>
 <element name="R33" library="rcl" package="0207/12" value="10k" x="31.75" y="115.57" rot="MR90"/>
 <element name="R34" library="rcl" package="0207/12" value="10k" x="29.21" y="115.57" rot="MR270"/>
 <element name="R35" library="rcl" package="0207/12" value="10k" x="26.67" y="115.57" rot="MR90"/>
-<element name="C14" library="rcl" package="C1206K" value="330n" x="30.48" y="104.14" rot="MR0"/>
+<element name="C14" library="rcl" package="C1206K" value="100n" x="30.48" y="104.14" rot="MR0"/>
 <element name="LED2" library="led" package="LED3MM" value="2.2V 25mA" x="77.47" y="90.17" rot="R270"/>
 <element name="LED3" library="led" package="LED3MM" value="2.2V 25mA" x="85.09" y="90.17" rot="R270"/>
 <element name="R36" library="rcl" package="0207/12" value="390R" x="81.28" y="86.36" rot="R90"/>

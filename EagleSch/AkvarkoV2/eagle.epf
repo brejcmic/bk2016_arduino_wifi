@@ -19,6 +19,7 @@ UsedLibrary="C:/Program Files (x86)/Eagle7.2.0/lbr/74xx-little-us.lbr"
 UsedLibrary="C:/Program Files (x86)/Eagle7.2.0/lbr/74xx-us.lbr"
 UsedLibrary="C:/Program Files (x86)/Eagle7.2.0/lbr/751xx.lbr"
 UsedLibrary="C:/Program Files (x86)/Eagle7.2.0/lbr/IQD-Frequency-Products.lbr"
+UsedLibrary="C:/Program Files (x86)/Eagle7.2.0/lbr/adafruit.lbr"
 UsedLibrary="C:/Program Files (x86)/Eagle7.2.0/lbr/advanced-test-technologies.lbr"
 UsedLibrary="C:/Program Files (x86)/Eagle7.2.0/lbr/agilent-technologies.lbr"
 UsedLibrary="C:/Program Files (x86)/Eagle7.2.0/lbr/allegro.lbr"
@@ -347,15 +348,20 @@ UsedLibrary="C:/Program Files (x86)/Eagle7.2.0/lbr/xilinx-xc9.lbr"
 UsedLibrary="C:/Program Files (x86)/Eagle7.2.0/lbr/xilinx-xcv.lbr"
 UsedLibrary="C:/Program Files (x86)/Eagle7.2.0/lbr/zetex.lbr"
 UsedLibrary="C:/Program Files (x86)/Eagle7.2.0/lbr/zilog.lbr"
-UsedLibrary="C:/Program Files (x86)/Eagle7.2.0/lbr/adafruit.lbr"
 
 [Win_1]
+Type="Control Panel"
+Loc="652 321 1251 720"
+State=1
+Number=0
+
+[Win_2]
 Type="Schematic Editor"
 Loc="652 321 1251 720"
 State=1
 Number=1
 File="budicLED.sch"
-View="-126.892 -20.1433 5.26472 101.69"
+View="-138.172 -53.5647 135.868 199.069"
 WireWidths=" 0 0.3048 0.6096 0.8128 1.016 1.27 1.4224 1.6764 1.778 1.9304 2.1844 2.54 3.81 6.4516 0.4064 0.1524"
 PadDiameters=" 0.254 0.3048 0.4064 0.6096 0.8128 1.016 1.27 1.4224 1.6764 1.778 1.9304 2.1844 2.54 3.81 6.4516 0"
 PadDrills=" 0.5 0.6 0.7 0.9 1 1.1 1.2 1.3 1.4 1.5 1.6 2 2.2 2.8 3.2 0.8"
@@ -394,14 +400,8 @@ ArcDirection=0
 AddLevel=2
 PadsSameType=0
 Layer=91
-Views=" 1: -126.892 -20.1433 5.26472 101.69"
+Views=" 1: -138.172 -53.5647 135.868 199.069"
 Sheet="1"
-
-[Win_2]
-Type="Control Panel"
-Loc="652 321 1251 720"
-State=1
-Number=0
 
 [Desktop]
 Screen="1920 1080"
