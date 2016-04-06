@@ -1,0 +1,83 @@
+#--------------------------------------
+#all files are ignored by default
+#--------------------------------------
+*.*
+
+#--------------------------------------
+#permited files
+#--------------------------------------
+
+#txt files
+!*.txt
+!.placeholder
+
+#ignore list
+!*.gitignore
+
+#figures
+!*.png
+
+#PROFICAD
+!*.sxe
+
+#HTML
+!*.html
+
+#tex files
+!*.tex
+!*.cls
+!*.bib
+!*.bst
+!*.sty
+
+#C source files
+!*.c
+!*.h
+
+#ASM source files
+!*.asm
+
+#JAVA files
+!*.java
+
+!*.form
+
+!*.jar
+
+#office files
+!*.docx
+!*.docm
+!*.doc
+!*.xlsx
+!*.xlsm
+!*.xls
+!*.rtf
+!*.pptx
+!*.odp
+!*.csv
+
+#matlab files
+!*.m
+!*.mat
+!*.slx
+!*.fig
+
+#eagle files
+!*.sch
+!*.brd
+
+!*.pdf
+
+#--------------------------------------
+#ignored files - special specifications
+#--------------------------------------
+
+#some files, that do not have suffix
+makefile
+
+#office temporary files
+~$*.docx
+~$*.xlsx
+~$*.doc
+~$*.xls
+~$*.rtf
