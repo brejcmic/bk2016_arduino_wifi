@@ -20828,20 +20828,24 @@ Based on the following sources:
 <segment>
 <pinref part="U1" gate="G$1" pin="D4"/>
 <wire x1="-43.18" y1="38.1" x2="-38.1" y2="38.1" width="0.1524" layer="91"/>
+<label x="-43.18" y="38.1" size="1.778" layer="95"/>
 </segment>
 <segment>
 <pinref part="LED2" gate="G$1" pin="A"/>
 <wire x1="-43.18" y1="-25.4" x2="-50.8" y2="-25.4" width="0.1524" layer="91"/>
+<label x="-50.8" y="-25.4" size="1.778" layer="95"/>
 </segment>
 </net>
 <net name="LEDB" class="0">
 <segment>
 <pinref part="U1" gate="G$1" pin="D2"/>
 <wire x1="-43.18" y1="33.02" x2="-38.1" y2="33.02" width="0.1524" layer="91"/>
+<label x="-43.18" y="33.02" size="1.778" layer="95"/>
 </segment>
 <segment>
 <pinref part="LED3" gate="G$1" pin="A"/>
 <wire x1="-43.18" y1="-35.56" x2="-50.8" y2="-35.56" width="0.1524" layer="91"/>
+<label x="-50.8" y="-35.56" size="1.778" layer="95"/>
 </segment>
 </net>
 <net name="N$43" class="0">
