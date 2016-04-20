@@ -1,3 +1,5 @@
+#include <SPI.h>
+#include <SD.h>
 #include <SoftwareSerial.h>
 #include <avr/pgmspace.h>
 
@@ -9,6 +11,8 @@ SoftwareSerial softSerial(8, 7); // RX, TX
 #define PWM_2               5
 #define PWM_3               6
 #define PWM_4               9
+
+#define VERSION   "Aquaduino verze 160420"
 
 #define esp8266Ser  softSerial
 #define ESP8266SPEED        9600// cilova rzchlost kolmunikace
@@ -78,6 +82,21 @@ void setup() {
   com_setupEsp8266();
   digitalWrite(LED_RED, LOW);
   digitalWrite(LED_YEL, HIGH);
+  //SD karta
+  if(!SD.begin()) 
+  {
+    wrMsg("\nSD karta neni k dispozici");
+  }
+  else
+  {
+    wrMsg("\n<ok> Nalezena SD karta");
+    File readmeFile = SD.open("readme.txt", FILE_WRITE);
+    if(readmeFile)
+    {
+      readmeFile.println(F(VERSION));
+      readmeFile.close();
+    }
+  }
 }
 //=========================================================================================
 void loop() {
