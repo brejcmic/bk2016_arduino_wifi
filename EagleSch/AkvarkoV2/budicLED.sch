@@ -9387,36 +9387,6 @@ diameter 5.2 mm, horizontal, grid 15.24 mm</description>
 <rectangle x1="1.2" y1="-0.45" x2="1.95" y2="0.4" layer="51"/>
 <rectangle x1="-1.05" y1="-0.65" x2="-0.15" y2="0.7" layer="51"/>
 </package>
-<package name="SOD323-R">
-<description>&lt;b&gt;SOD323 Reflow soldering&lt;/b&gt; Philips SC01_Mounting_1996.pdf</description>
-<wire x1="-1" y1="0.7" x2="1" y2="0.7" width="0.1524" layer="51"/>
-<wire x1="1" y1="0.7" x2="1" y2="-0.7" width="0.1524" layer="51"/>
-<wire x1="1" y1="-0.7" x2="-1" y2="-0.7" width="0.1524" layer="51"/>
-<wire x1="-1" y1="-0.7" x2="-1" y2="0.7" width="0.1524" layer="51"/>
-<wire x1="-0.5" y1="0" x2="0.1" y2="0.4" width="0.1524" layer="51"/>
-<wire x1="0.1" y1="0.4" x2="0.1" y2="-0.4" width="0.1524" layer="51"/>
-<wire x1="0.1" y1="-0.4" x2="-0.5" y2="0" width="0.1524" layer="51"/>
-<smd name="C" x="-1.1" y="0" dx="0.6" dy="0.6" layer="1"/>
-<smd name="A" x="1.1" y="0" dx="0.6" dy="0.6" layer="1"/>
-<text x="-1.1" y="1" size="1.27" layer="25">&gt;NAME</text>
-<text x="-1.1" y="-2.3" size="1.27" layer="27">&gt;VALUE</text>
-<rectangle x1="-0.7" y1="-0.7" x2="-0.5" y2="0.7" layer="51"/>
-</package>
-<package name="SOD323-W">
-<description>&lt;b&gt;SOD323 Wave soldering&lt;/b&gt; Philips SC01_Mounting_1996.pdf</description>
-<wire x1="-1" y1="0.7" x2="1" y2="0.7" width="0.1524" layer="51"/>
-<wire x1="1" y1="0.7" x2="1" y2="-0.7" width="0.1524" layer="51"/>
-<wire x1="1" y1="-0.7" x2="-1" y2="-0.7" width="0.1524" layer="51"/>
-<wire x1="-1" y1="-0.7" x2="-1" y2="0.7" width="0.1524" layer="51"/>
-<wire x1="-0.5" y1="0" x2="0.1" y2="0.4" width="0.1524" layer="51"/>
-<wire x1="0.1" y1="0.4" x2="0.1" y2="-0.4" width="0.1524" layer="51"/>
-<wire x1="0.1" y1="-0.4" x2="-0.5" y2="0" width="0.1524" layer="51"/>
-<smd name="C" x="-1.45" y="0" dx="1.5" dy="1.2" layer="1"/>
-<smd name="A" x="1.45" y="0" dx="1.5" dy="1.2" layer="1"/>
-<text x="-1.1" y="1" size="1.27" layer="25">&gt;NAME</text>
-<text x="-1.1" y="-2.3" size="1.27" layer="27">&gt;VALUE</text>
-<rectangle x1="-0.7" y1="-0.7" x2="-0.5" y2="0.7" layer="51"/>
-</package>
 <package name="GF1">
 <description>&lt;b&gt;GF1&lt;/b&gt;&lt;p&gt;
 General Semiconductor</description>
@@ -9614,6 +9584,36 @@ Source: http://www.diodes.com/datasheets/ds23001.pdf</description>
 <rectangle x1="2.082" y1="-0.425" x2="2.717" y2="0.425" layer="21"/>
 <rectangle x1="-2.717" y1="-0.425" x2="-2.082" y2="0.425" layer="21"/>
 </package>
+<package name="SOD323-R">
+<description>&lt;b&gt;SOD323 Reflow soldering&lt;/b&gt; Philips SC01_Mounting_1996.pdf</description>
+<wire x1="-1" y1="0.7" x2="1" y2="0.7" width="0.1524" layer="21"/>
+<wire x1="1" y1="0.7" x2="1" y2="-0.7" width="0.1524" layer="51"/>
+<wire x1="1" y1="-0.7" x2="-1" y2="-0.7" width="0.1524" layer="21"/>
+<wire x1="-1" y1="-0.7" x2="-1" y2="0.7" width="0.1524" layer="51"/>
+<wire x1="-0.5" y1="0" x2="0.1" y2="0.4" width="0.1524" layer="21"/>
+<wire x1="0.1" y1="0.4" x2="0.1" y2="-0.4" width="0.1524" layer="21"/>
+<wire x1="0.1" y1="-0.4" x2="-0.5" y2="0" width="0.1524" layer="21"/>
+<smd name="C" x="-1.1" y="0" dx="0.6" dy="0.6" layer="1"/>
+<smd name="A" x="1.1" y="0" dx="0.6" dy="0.6" layer="1"/>
+<text x="-1.1" y="1" size="1.27" layer="25">&gt;NAME</text>
+<text x="-1.1" y="-2.3" size="1.27" layer="27">&gt;VALUE</text>
+<rectangle x1="-0.7" y1="-0.7" x2="-0.5" y2="0.7" layer="51"/>
+</package>
+<package name="SOD323-W">
+<description>&lt;b&gt;SOD323 Wave soldering&lt;/b&gt; Philips SC01_Mounting_1996.pdf</description>
+<wire x1="-1" y1="0.7" x2="1" y2="0.7" width="0.1524" layer="51"/>
+<wire x1="1" y1="0.7" x2="1" y2="-0.7" width="0.1524" layer="51"/>
+<wire x1="1" y1="-0.7" x2="-1" y2="-0.7" width="0.1524" layer="51"/>
+<wire x1="-1" y1="-0.7" x2="-1" y2="0.7" width="0.1524" layer="51"/>
+<wire x1="-0.5" y1="0" x2="0.1" y2="0.4" width="0.1524" layer="21"/>
+<wire x1="0.1" y1="0.4" x2="0.1" y2="-0.4" width="0.1524" layer="21"/>
+<wire x1="0.1" y1="-0.4" x2="-0.5" y2="0" width="0.1524" layer="21"/>
+<smd name="C" x="-1.45" y="0" dx="1.5" dy="1.2" layer="1"/>
+<smd name="A" x="1.45" y="0" dx="1.5" dy="1.2" layer="1"/>
+<text x="-1.1" y="1" size="1.27" layer="25">&gt;NAME</text>
+<text x="-1.1" y="-2.3" size="1.27" layer="27">&gt;VALUE</text>
+<rectangle x1="-0.7" y1="-0.7" x2="-0.5" y2="0.7" layer="51"/>
+</package>
 </packages>
 <symbols>
 <symbol name="D">
@@ -9626,6 +9626,8 @@ Source: http://www.diodes.com/datasheets/ds23001.pdf</description>
 <text x="2.54" y="-2.3114" size="1.778" layer="96">&gt;VALUE</text>
 <pin name="A" x="-2.54" y="0" visible="off" length="short" direction="pas"/>
 <pin name="C" x="2.54" y="0" visible="off" length="short" direction="pas" rot="R180"/>
+<text x="-2.54" y="0" size="0.4064" layer="99" align="center">SpiceOrder 1</text>
+<text x="2.54" y="0" size="0.4064" layer="99" align="center">SpiceOrder 2</text>
 </symbol>
 </symbols>
 <devicesets>
@@ -19738,9 +19740,9 @@ Based on the following sources:
 <part name="R32" library="rcl" deviceset="R-EU_" device="0207/12" value="3k3"/>
 <part name="C13" library="rcl" deviceset="C-EU" device="C1206K" value="100n"/>
 <part name="Q5" library="transistor-npn" deviceset="BC546*" device="" technology="A"/>
-<part name="R33" library="rcl" deviceset="R-EU_" device="0207/12" value="10k"/>
+<part name="R33" library="rcl" deviceset="R-EU_" device="0207/12" value="12k"/>
 <part name="R34" library="rcl" deviceset="R-EU_" device="0207/12" value="10k"/>
-<part name="R35" library="rcl" deviceset="R-EU_" device="0207/12" value="10k"/>
+<part name="R35" library="rcl" deviceset="R-EU_" device="0207/12" value="2k4"/>
 <part name="C14" library="rcl" deviceset="C-EU" device="C1206K" value="100n"/>
 <part name="LED2" library="led" deviceset="LED" device="3MM" value="2.2V 25mA"/>
 <part name="LED3" library="led" deviceset="LED" device="3MM" value="2.2V 25mA"/>
@@ -19760,6 +19762,7 @@ Based on the following sources:
 <part name="R40" library="rcl" deviceset="R-EU_" device="0207/12" value="0R0"/>
 <part name="R41" library="rcl" deviceset="R-EU_" device="0207/12" value="0R0"/>
 <part name="GND26" library="supply1" deviceset="GND" device=""/>
+<part name="D5" library="diode" deviceset="DIODE-" device="MELF-MLL41"/>
 </parts>
 <sheets>
 <sheet>
@@ -19850,7 +19853,7 @@ Based on the following sources:
 <instance part="P+5" gate="1" x="-53.34" y="193.04"/>
 <instance part="IC2" gate="A" x="-55.88" y="111.76" rot="MR0"/>
 <instance part="IC2" gate="P" x="106.68" y="185.42" rot="R90"/>
-<instance part="P+3" gate="1" x="-109.22" y="43.18" rot="R90"/>
+<instance part="P+3" gate="1" x="-193.04" y="43.18" rot="R90"/>
 <instance part="C11" gate="G$1" x="-76.2" y="119.38"/>
 <instance part="R23" gate="G$1" x="-55.88" y="0" rot="R180"/>
 <instance part="R24" gate="G$1" x="27.94" y="142.24" rot="R180"/>
@@ -19893,6 +19896,7 @@ Based on the following sources:
 <instance part="R40" gate="G$1" x="-177.8" y="99.06" rot="R270"/>
 <instance part="R41" gate="G$1" x="-177.8" y="124.46" rot="R90"/>
 <instance part="GND26" gate="1" x="-167.64" y="96.52"/>
+<instance part="D5" gate="G$1" x="-162.56" y="43.18"/>
 </instances>
 <busses>
 <bus name="SENS[1..4]">
@@ -20398,8 +20402,8 @@ Based on the following sources:
 </segment>
 <segment>
 <pinref part="P+3" gate="1" pin="+12V"/>
-<pinref part="U1" gate="G$1" pin="VIN"/>
-<wire x1="-106.68" y1="43.18" x2="-104.14" y2="43.18" width="0.1524" layer="91"/>
+<wire x1="-190.5" y1="43.18" x2="-165.1" y2="43.18" width="0.1524" layer="91"/>
+<pinref part="D5" gate="G$1" pin="A"/>
 </segment>
 </net>
 <net name="N$21" class="0">
@@ -20965,6 +20969,13 @@ Based on the following sources:
 <wire x1="-167.64" y1="109.22" x2="-167.64" y2="111.76" width="0.1524" layer="91"/>
 <wire x1="-167.64" y1="111.76" x2="-177.8" y2="111.76" width="0.1524" layer="91"/>
 <junction x="-177.8" y="111.76"/>
+</segment>
+</net>
+<net name="N$48" class="0">
+<segment>
+<pinref part="U1" gate="G$1" pin="VIN"/>
+<pinref part="D5" gate="G$1" pin="C"/>
+<wire x1="-160.02" y1="43.18" x2="-104.14" y2="43.18" width="0.1524" layer="91"/>
 </segment>
 </net>
 </nets>
