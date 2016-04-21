@@ -1,3 +1,4 @@
+#include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
@@ -13,6 +14,8 @@ SoftwareSerial softSerial(8, 7); // RX, TX
 #define PWM_4               9
 
 #define VERSION   "Aquaduino verze 160420"
+
+#define DS3231_I2C_ADDRESS 0x68
 
 #define esp8266Ser  softSerial
 #define ESP8266SPEED        9600// cilova rzchlost kolmunikace
@@ -68,6 +71,14 @@ typedef struct
 } mac_t;
 //=========================================================================================
 void setup() {
+  byte second;
+  byte minute;
+  byte hour;
+  byte dayOfWeek;
+  byte dayOfMonth;
+  byte month;
+  byte year;
+  
   pinMode(LED_RED, OUTPUT);           // set pin to input
   pinMode(LED_YEL, OUTPUT);           // set pin to input
   pinMode(PWM_1, OUTPUT);
@@ -82,6 +93,9 @@ void setup() {
   com_setupEsp8266();
   digitalWrite(LED_RED, LOW);
   digitalWrite(LED_YEL, HIGH);
+  //RTC
+  Wire.begin();
+  readDS3231time(&second, &minute, &hour, &dayOfWeek, &dayOfMonth, &month, &year);
   //SD karta
   if(!SD.begin()) 
   {
@@ -90,17 +104,54 @@ void setup() {
   else
   {
     wrMsg("\n<ok> Nalezena SD karta");
-    File readmeFile = SD.open("readme.txt", FILE_WRITE);
-    if(readmeFile)
+    File thisFile = SD.open("readme.txt", FILE_WRITE);
+    if(thisFile)
     {
-      readmeFile.println(F(VERSION));
-      readmeFile.close();
+      thisFile.println(F(VERSION));
+      thisFile.print(hour);
+      thisFile.print(':');
+      thisFile.print(minute);
+      thisFile.print(':');
+      thisFile.print(second);
+      thisFile.print("  |");
+      thisFile.print(dayOfWeek);
+      thisFile.print("|  ");
+      thisFile.print(dayOfMonth);
+      thisFile.print('.');
+      thisFile.print(month);
+      thisFile.print('.');
+      thisFile.println(year);
+      thisFile.close();
     }
   }
 }
 //=========================================================================================
 void loop() {
   com_monitor();
+}
+//=========================================================================================
+// Convert normal decimal numbers to binary coded decimal
+byte decToBcd(byte val){
+    return( (val/10*16) + (val%10) );
+}
+
+// Convert binary coded decimal to normal decimal numbers
+byte bcdToDec(byte val){
+    return( (val/16*10) + (val%16) );
+}
+void readDS3231time(byte *second, byte *minute, byte *hour, byte *dayOfWeek, byte *dayOfMonth, byte *month, byte *year){
+    Wire.beginTransmission(DS3231_I2C_ADDRESS);
+    Wire.write(0); // set DS3231 register pointer to 00h
+    Wire.endTransmission();
+    Wire.requestFrom(DS3231_I2C_ADDRESS, 7);
+    // request seven bytes of data from DS3231 starting from register 00h
+    *second = bcdToDec(Wire.read() & 0x7f);
+    *minute = bcdToDec(Wire.read());
+    *hour = bcdToDec(Wire.read() & 0x3f);
+    *dayOfWeek = bcdToDec(Wire.read());
+    *dayOfMonth = bcdToDec(Wire.read());
+    *month = bcdToDec(Wire.read());
+    *year = bcdToDec(Wire.read());
 }
 //=========================================================================================
 unsigned int com_setupServisCh(void)
