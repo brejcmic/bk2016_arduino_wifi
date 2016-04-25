@@ -564,11 +564,15 @@ void com_monitor(void)
     case HEADTX: //odesilani hlavicky
       thisFile = SD.open(F("html/head.txt"), FILE_READ);
       txlen = thisFile.size();
+      while(thisFile.available())
+      {
+        esp8266Ser.print(thisFile.read());
+      }
       thisFile.close();
-      
-      esp8266Ser.print(page);
-      //uprava delek o velikost odeslane hlavicky
-      txlen = sizeof(mainpage) - 1;
+      //priprava na odeslani hlavni stranky
+      thisFile = SD.open(F("html/mainpage.htm"), FILE_READ);
+      txlen = thisFile.size();
+      thisFile.close();
       txpb = 0;
       txch = 0; //vysilani prvniho znaku
       com_delay(0);//synchronizace casu
@@ -581,6 +585,8 @@ void com_monitor(void)
     case MAINPAGETX:
       if(com_delay(ESP8266TXPER))
       {
+        thisFile = SD.open(F("html/mainpage.htm"), FILE_READ);
+        thisFile.seek(txch);
         for (idx = 0; idx < ESP8266CHARCT; idx++, txch++)
         {
           if(txch >= txpb)
@@ -593,11 +599,12 @@ void com_monitor(void)
           }
           else
           {
-            dataByte = pgm_read_byte_near(mainpage + txch);
+            dataByte = thisFile.read();
             wrLog(dataByte, (srState == LOGSR));
             esp8266Ser.write(dataByte);
           }
         }
+        thisFile.close();
       }
       break;
 
