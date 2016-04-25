@@ -5,6 +5,7 @@
 #include <avr/pgmspace.h>
 
 SoftwareSerial softSerial(8, 7); // RX, TX
+File thisFile;
 
 #define LED_RED             4
 #define LED_YEL             2
@@ -18,14 +19,14 @@ SoftwareSerial softSerial(8, 7); // RX, TX
 #define DS3231_I2C_ADDRESS 0x68
 
 #define esp8266Ser  softSerial
-#define ESP8266SPEED        9600// cilova rzchlost kolmunikace
+#define ESP8266SPEED        9600// cilova rzchlost komunikace
 #define ESP8266CHARCT       20// pocet najednou odesilanych znaku
 #define ESP8266TXPER        10// perioda vysilani v ms
 #define ESP8266PACKETLEN    1024 //maximalni velikost packetu v byte
 #define COM_WATCHDOG_TIME   3000// cas v ms, po kterem se resetuje stav RX
 #define COM_RX_LEN          32 //delka fifa pro prijem z esp8266
 #define COM_SR_LEN          8 //delka fifa pro prijem ze servisni linky
-#define COM_MSG_LEN         64 //delka kruhoveho bufferu pro ulozeni servisni zpravy, mocnina 2
+#define COM_MSG_LEN         32 //delka kruhoveho bufferu pro ulozeni servisni zpravy, mocnina 2
 #define COM_MSG_MSK         COM_MSG_LEN-1 //maska pro pretekani indexu bufferu servisni zpravy
 
 #define DEBUG       0
@@ -36,16 +37,16 @@ SoftwareSerial softSerial(8, 7); // RX, TX
 #define WRTDBG(x)   debugSer.write(x) //bez konverze
 #define WRCDBG(x)   debugSer.print(x) //s konverzi
 #define wrLog(x, b) debugSer.write(x) //trvaly vypis logu
-#define wrMsg(x)    debugSer.println(F(x)) //vypis zpravy
+#define wrMsg(x)    debugSer.print(F(x)) //vypis zpravy
 #else
 #define PRTDBG(x)
 #define WRTDBG(x)
 #define WRCDBG(x)
 #define wrLog(x, b) if(b) debugSer.write(x) //podmineny vypis logu
-#define wrMsg(x)    debugSer.println(F(x)) //vypis zpravy
+#define wrMsg(x)    debugSer.print(F(x)) //vypis zpravy
 #endif
 
-const char headhttp[] = {"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: "};//nechat v ramce
+const char headhttp[] = {""};//nechat v ramce
 const char mainpage[] PROGMEM = {"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"><html><head><title>Aquaduino</title><link href=\"data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQEAYAAABPYyMiAAAABmJLR0T///////8JWPfcAAAACXBIWXMAAABIAAAASABGyWs+AAAAF0lEQVRIx2NgGAWjYBSMglEwCkbBSAcACBAAAeaR9cIAAAAASUVORK5CYII=\" rel=\"icon\" type=\"image/x-icon\" /></head><body>Ahoj<form action=\"/wtf\"><input type=\"submit\" name=\"do\" value=\"zluta\"><input type=\"submit\" name=\"do\" value=\"cervena\"></form> </body></html>"};
 
 typedef enum {
@@ -60,17 +61,7 @@ typedef enum {
   LOGSR, WAITSR, ATCOMMSR, ATSENDSR
 } srStates_t;
 
-typedef struct
-{
-  unsigned int Byte0;
-  unsigned int Byte1;
-  unsigned int Byte2;
-  unsigned int Byte3;
-  unsigned int Byte4;
-  unsigned int Byte5;
-} mac_t;
-//=========================================================================================
-void setup() {
+typedef struct {
   byte second;
   byte minute;
   byte hour;
@@ -78,6 +69,10 @@ void setup() {
   byte dayOfMonth;
   byte month;
   byte year;
+} time_t;
+//=========================================================================================
+void setup() {
+  unsigned long mainPgSize;
   
   pinMode(LED_RED, OUTPUT);           // set pin to input
   pinMode(LED_YEL, OUTPUT);           // set pin to input
@@ -95,33 +90,39 @@ void setup() {
   digitalWrite(LED_YEL, HIGH);
   //RTC
   Wire.begin();
-  readDS3231time(&second, &minute, &hour, &dayOfWeek, &dayOfMonth, &month, &year);
   //SD karta
   if(!SD.begin()) 
   {
-    wrMsg("\nSD karta neni k dispozici");
+    wrMsg("\n<X> SD karta neni k dispozici");
   }
   else
   {
     wrMsg("\n<ok> Nalezena SD karta");
-    File thisFile = SD.open("readme.txt", FILE_WRITE);
-    if(thisFile)
+    wrMsg("\n\nHledani hlavickoveho souboru: html/head.txt");
+    if(SD.exists("html/head.txt"));
     {
-      thisFile.println(F(VERSION));
-      thisFile.print(hour);
-      thisFile.print(':');
-      thisFile.print(minute);
-      thisFile.print(':');
-      thisFile.print(second);
-      thisFile.print("  |");
-      thisFile.print(dayOfWeek);
-      thisFile.print("|  ");
-      thisFile.print(dayOfMonth);
-      thisFile.print('.');
-      thisFile.print(month);
-      thisFile.print('.');
-      thisFile.println(year);
-      thisFile.close();
+      wrMsg("\n<ok> Hlavickovy soubor nalezen, nebude generovan novy");
+    }
+    {
+      wrMsg("\n<X> Hlavickovy soubor nenalezen, generuje se novy");
+      wrMsg("\n\nHledani souboru html/mainpage.htm");
+      thisFile = SD.open(F("html/mainpage.htm"), FILE_READ);
+      if(thisFile)
+      {
+        wrMsg("\n<ok> Soubor mainpage.htm nalezen");
+        mainPgSize = thisFile.size();
+        thisFile.close();
+
+        thisFile = SD.open(F("html/head.txt"), FILE_WRITE);
+        thisFile.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: "));
+        thisFile.print(mainPgSize);
+        thisFile.print(F("\r\n\r\n"));
+        thisFile.close();
+      }
+      else
+      {
+        wrMsg("\n<X> Soubor hlavni stranky nebyl nalezen");
+      }
     }
   }
 }
@@ -139,19 +140,19 @@ byte decToBcd(byte val){
 byte bcdToDec(byte val){
     return( (val/16*10) + (val%16) );
 }
-void readDS3231time(byte *second, byte *minute, byte *hour, byte *dayOfWeek, byte *dayOfMonth, byte *month, byte *year){
+void readDS3231time(time_t *clk){
     Wire.beginTransmission(DS3231_I2C_ADDRESS);
     Wire.write(0); // set DS3231 register pointer to 00h
     Wire.endTransmission();
     Wire.requestFrom(DS3231_I2C_ADDRESS, 7);
     // request seven bytes of data from DS3231 starting from register 00h
-    *second = bcdToDec(Wire.read() & 0x7f);
-    *minute = bcdToDec(Wire.read());
-    *hour = bcdToDec(Wire.read() & 0x3f);
-    *dayOfWeek = bcdToDec(Wire.read());
-    *dayOfMonth = bcdToDec(Wire.read());
-    *month = bcdToDec(Wire.read());
-    *year = bcdToDec(Wire.read());
+    clk->second = bcdToDec(Wire.read() & 0x7f);
+    clk->minute = bcdToDec(Wire.read());
+    clk->hour = bcdToDec(Wire.read() & 0x3f);
+    clk->dayOfWeek = bcdToDec(Wire.read());
+    clk->dayOfMonth = bcdToDec(Wire.read());
+    clk->month = bcdToDec(Wire.read());
+    clk->year = bcdToDec(Wire.read());
 }
 //=========================================================================================
 unsigned int com_setupServisCh(void)
@@ -164,10 +165,10 @@ unsigned int com_setupServisCh(void)
 //=========================================================================================
 unsigned int com_setupEsp8266()
 {
-  unsigned int ret;
+  byte ret;
   char rx[4];
   String atMsg;
-  int idx;
+  byte idx;
   ret = 2; //pocet pokusu o navazani spojeni
   //Predpoklada se na pocatku uspesna inicializace
   ret = (ret << 1) + 1;
@@ -178,10 +179,10 @@ unsigned int com_setupEsp8266()
     if(!(ret & 1))
     {
       esp8266Ser.println(F("AT+RST"));
-      wrMsg("\nRESET esp8266.");
+      wrMsg("\nRESET esp8266.\n");
       for (idx = 0; idx < 5; idx++)
       {
-        wrLog('*', 1);
+        wrMsg("*");
         delay(1000);
       }
       ret++;//nastaveni posledniho bitu
@@ -197,13 +198,13 @@ unsigned int com_setupEsp8266()
     wrMsg("\nInicializace komunikace s esp8266.");
     for (idx = 0; idx < 5; idx++)
     {
-      wrLog('*', 1);
+      wrMsg("*");
       delay(1000);
     }
     esp8266Ser.begin(ESP8266SPEED);
     //Kontrola primu
     //----------------------------------------------------
-    wrMsg("\nPokus o spojeni");
+    wrMsg("\nPokus o spojeni\n");
     esp8266Ser.println(F("AT"));
     com_delay(0); //reset casu
     idx = 0;
@@ -212,7 +213,7 @@ unsigned int com_setupEsp8266()
       if(com_delay(1000))
       {
         idx++;
-        wrLog('*', 1);
+        wrMsg("*");
       }
       else if(idx > 2)
       {
@@ -240,7 +241,7 @@ unsigned int com_setupEsp8266()
     {
       //Pokus o pripojeni k wifi
       //----------------------------------------------------
-      wrMsg("\nPripojovani k WIFI siti");
+      wrMsg("\nPripojovani k WIFI siti\n");
       atMsg = String("AT+CWJAP_CUR=\"");
       atMsg += String("brejcmicDebug");
       atMsg += String("\",\"");
@@ -254,7 +255,7 @@ unsigned int com_setupEsp8266()
         if(com_delay(1000))
         {
           idx++;
-          wrLog('*', 1);
+          wrMsg("*");
         }
         else if(idx > 15)
         {
@@ -348,11 +349,11 @@ void com_putCharInFifo(char nChar, char *fifo, unsigned int flen)
   fifo[0] = nChar;
 }
 //=========================================================================================
-unsigned int com_delay(unsigned long timeDelay)
+byte com_delay(unsigned long timeDelay)
 {
   static unsigned long lastTime;
   unsigned long currTime;
-  unsigned int ret;
+  byte ret;
 
   currTime = millis();
   ret = ((currTime - lastTime) >= timeDelay);
@@ -361,14 +362,6 @@ unsigned int com_delay(unsigned long timeDelay)
     lastTime = currTime;
   }
   return ret;
-}
-//=========================================================================================
-unsigned int com_putCharInCyrcBuff(char nChar, char *cArr, unsigned int msk)
-{
-  static unsigned int idx = 0;
-  idx++;
-  idx &= msk;
-  cArr[idx] = nChar;
 }
 //=========================================================================================
 void com_monitor(void)
@@ -382,7 +375,7 @@ void com_monitor(void)
   static txStates_t txState = WAITTX;//stav vysilani
   static txStates_t reqState = WAITTX;//pozadovany stav vysilani dle prijmu
   static txStates_t ackState = WAITTX;//stav pro vysilani po obdrzeni znaku ">"
-  static int client; //klient
+  static byte client; //klient
   static unsigned long txch = 0; //index aktualne vysilaneho znaku
   static unsigned long txpb; //hranice vysilaneho packetu v poctu byte
   static unsigned long txlen; //celkova delka zpravy
@@ -545,11 +538,10 @@ void com_monitor(void)
       }
       break;
 
-    case REQSNDPGTX://pozadovano vzsilani hlavni stranky
-      page = String(headhttp);
-      page += String((sizeof(mainpage) - 1));
-      page += String("\r\n\r\n");
-      txlen = page.length();
+    case REQSNDPGTX://pozadovano vysilani hlavni stranky
+      thisFile = SD.open(F("html/head.txt"), FILE_READ);
+      txlen = thisFile.size();
+      thisFile.close();
       txpb = txlen; //delka paketu hlavicky zde neni omezena
       txch = 0; //vysilani prvniho znaku paketu
       ackState = HEADTX; //po obdrzeni potvrzeni vysilani skocit do vysilani hlavicky
@@ -570,9 +562,10 @@ void com_monitor(void)
       break;
 
     case HEADTX: //odesilani hlavicky
-      page = String(headhttp);
-      page += String((sizeof(mainpage) - 1));
-      page += String("\r\n\r\n");
+      thisFile = SD.open(F("html/head.txt"), FILE_READ);
+      txlen = thisFile.size();
+      thisFile.close();
+      
       esp8266Ser.print(page);
       //uprava delek o velikost odeslane hlavicky
       txlen = sizeof(mainpage) - 1;
@@ -677,7 +670,7 @@ void com_monitor(void)
       case LOGSR: //vypisuje log az do prijeti SR+END
         if(com_findInFifo("SR+END", srFifo, COM_SR_LEN))
         {
-          wrMsg("\nSR+END\n\nOK");
+          wrMsg("\nSR+END\n\nOK\n");
           srState = WAITSR;
           break;
         }
