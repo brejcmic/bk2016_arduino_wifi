@@ -5,7 +5,6 @@
 #include <avr/pgmspace.h>
 
 SoftwareSerial softSerial(8, 7); // RX, TX
-File thisFile;
 
 #define LED_RED             4
 #define LED_YEL             2
@@ -26,10 +25,14 @@ File thisFile;
 #define COM_WATCHDOG_TIME   3000// cas v ms, po kterem se resetuje stav RX
 #define COM_RX_LEN          32 //delka fifa pro prijem z esp8266
 #define COM_SR_LEN          8 //delka fifa pro prijem ze servisni linky
-#define COM_MSG_LEN         32 //delka kruhoveho bufferu pro ulozeni servisni zpravy, mocnina 2
+#define COM_MSG_LEN         64 //delka kruhoveho bufferu pro ulozeni servisni zpravy, mocnina 2
 #define COM_MSG_MSK         COM_MSG_LEN-1 //maska pro pretekani indexu bufferu servisni zpravy
 
-#define DEBUG       0
+#define SD_FILE_HEAD        F("html/head.txt")
+#define SD_FILE_MNPG        F("html/mainpage.htm")
+#define SD_FILE_WIFI        F("wificfg.txt")
+
+#define DEBUG       1
 #define debugSer    Serial
 
 #if DEBUG == 1
@@ -46,11 +49,8 @@ File thisFile;
 #define wrMsg(x)    debugSer.print(F(x)) //vypis zpravy
 #endif
 
-const char headhttp[] = {""};//nechat v ramce
-const char mainpage[] PROGMEM = {"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"><html><head><title>Aquaduino</title><link href=\"data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQEAYAAABPYyMiAAAABmJLR0T///////8JWPfcAAAACXBIWXMAAABIAAAASABGyWs+AAAAF0lEQVRIx2NgGAWjYBSMglEwCkbBSAcACBAAAeaR9cIAAAAASUVORK5CYII=\" rel=\"icon\" type=\"image/x-icon\" /></head><body>Ahoj<form action=\"/wtf\"><input type=\"submit\" name=\"do\" value=\"zluta\"><input type=\"submit\" name=\"do\" value=\"cervena\"></form> </body></html>"};
-
 typedef enum {
-  WAITTX, REQSNDPGTX, ACKSNDTX, ACKTX, HEADTX, MAINPAGETX, FAVICONTX, NEXTPACKTTX, ATSENDTX, ONBUTTX, OFFBUTTX
+  WAITTX, REQHEADTX, REQMNPGTX, ACKSNDTX, ACKTX, HEADTX, MAINPAGETX, FAVICONTX, NEXTPACKTTX, ATSENDTX, ONBUTTX, OFFBUTTX
 } txStates_t;
 
 typedef enum {
@@ -72,8 +72,6 @@ typedef struct {
 } time_t;
 //=========================================================================================
 void setup() {
-  unsigned long mainPgSize;
-  
   pinMode(LED_RED, OUTPUT);           // set pin to input
   pinMode(LED_YEL, OUTPUT);           // set pin to input
   pinMode(PWM_1, OUTPUT);
@@ -90,41 +88,6 @@ void setup() {
   digitalWrite(LED_YEL, HIGH);
   //RTC
   Wire.begin();
-  //SD karta
-  if(!SD.begin()) 
-  {
-    wrMsg("\n<X> SD karta neni k dispozici");
-  }
-  else
-  {
-    wrMsg("\n<ok> Nalezena SD karta");
-    wrMsg("\n\nHledani hlavickoveho souboru: html/head.txt");
-    if(SD.exists("html/head.txt"));
-    {
-      wrMsg("\n<ok> Hlavickovy soubor nalezen, nebude generovan novy");
-    }
-    {
-      wrMsg("\n<X> Hlavickovy soubor nenalezen, generuje se novy");
-      wrMsg("\n\nHledani souboru html/mainpage.htm");
-      thisFile = SD.open(F("html/mainpage.htm"), FILE_READ);
-      if(thisFile)
-      {
-        wrMsg("\n<ok> Soubor mainpage.htm nalezen");
-        mainPgSize = thisFile.size();
-        thisFile.close();
-
-        thisFile = SD.open(F("html/head.txt"), FILE_WRITE);
-        thisFile.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: "));
-        thisFile.print(mainPgSize);
-        thisFile.print(F("\r\n\r\n"));
-        thisFile.close();
-      }
-      else
-      {
-        wrMsg("\n<X> Soubor hlavni stranky nebyl nalezen");
-      }
-    }
-  }
 }
 //=========================================================================================
 void loop() {
@@ -169,9 +132,49 @@ unsigned int com_setupEsp8266()
   char rx[4];
   String atMsg;
   byte idx;
+  File thisFile;
+  unsigned long mainPgSize;
+  //SD karta
   ret = 2; //pocet pokusu o navazani spojeni
   //Predpoklada se na pocatku uspesna inicializace
   ret = (ret << 1) + 1;
+  if(!SD.begin() && ret) 
+  {
+    wrMsg("\n<X> SD karta neni k dispozici");
+    ret = 0;
+  }
+  else
+  {
+    wrMsg("\n<ok> Nalezena SD karta");
+    wrMsg("\n\nHledani hlavickoveho souboru: html/head.txt");
+    if(SD.exists(SD_FILE_HEAD))
+    {
+      wrMsg("\n<ok> Hlavickovy soubor nalezen, nebude generovan novy");
+    }
+    else
+    {
+      wrMsg("\n<X> Hlavickovy soubor nenalezen, generuje se novy");
+      wrMsg("\n\nHledani souboru html/mainpage.htm");
+      thisFile = SD.open(SD_FILE_MNPG, FILE_READ);
+      if(thisFile)
+      {
+        wrMsg("\n<ok> Soubor mainpage.htm nalezen");
+        mainPgSize = thisFile.size();
+        thisFile.close();
+
+        thisFile = SD.open(SD_FILE_HEAD, FILE_WRITE);
+        thisFile.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: "));
+        thisFile.print(mainPgSize);
+        thisFile.print(F("\r\n\r\n"));
+        thisFile.close();
+      }
+      else
+      {
+        wrMsg("\n<X> Soubor hlavni stranky nebyl nalezen");
+        ret = 0;
+      }
+    }
+  }
   while (ret > 1)
   {
     //RESET pokud je treba
@@ -195,7 +198,7 @@ unsigned int com_setupEsp8266()
     atMsg += ESP8266SPEED;
     atMsg += String(F(",8,1,0,0"));
     esp8266Ser.println(atMsg);
-    wrMsg("\nInicializace komunikace s esp8266.");
+    wrMsg("\nInicializace komunikace s esp8266.\n");
     for (idx = 0; idx < 5; idx++)
     {
       wrMsg("*");
@@ -241,27 +244,38 @@ unsigned int com_setupEsp8266()
     {
       //Pokus o pripojeni k wifi
       //----------------------------------------------------
-      wrMsg("\nPripojovani k WIFI siti\n");
-      atMsg = String("AT+CWJAP_CUR=\"");
-      atMsg += String("brejcmicDebug");
-      atMsg += String("\",\"");
-      atMsg += String("testwifi");
-      atMsg += String("\"");
-      esp8266Ser.println(atMsg);//pokus o pripojeni k wifi
-      com_delay(0); //reset casu
-      idx = 0;
-      while (!com_checkRxESP8266For("OK", rx, 4) && (ret & 1))
+      thisFile = SD.open(SD_FILE_WIFI, FILE_READ);
+      if(!thisFile)
       {
-        if(com_delay(1000))
+        wrMsg("\n<X> Nedostupne nastaveni WIFI site (wificfg.txt)");
+      }
+      else
+      {
+        wrMsg("\nPripojovani k WIFI siti\n");
+        WRCDBG(thisFile.available());
+        while(thisFile.available())
         {
-          idx++;
-          wrMsg("*");
+          rx[0] = thisFile.read();
+          esp8266Ser.print(rx[0]);
+          WRCDBG(rx[0]);
         }
-        else if(idx > 15)
+        esp8266Ser.print(F("\r\n"));
+        thisFile.close();
+        com_delay(0); //reset casu
+        idx = 0;
+        while (!com_checkRxESP8266For("OK", rx, 4) && (ret & 1))
         {
-          wrMsg("\n<X> WIFI sit nedostupna.");
-          ret--;//shozeni nejnizsiho bitu
-        }
+          if(com_delay(1000))
+          {
+            idx++;
+            wrMsg("*");
+          }
+          else if(idx > 15)
+          {
+            wrMsg("\n<X> WIFI sit nedostupna.");
+            ret--;//shozeni nejnizsiho bitu
+          }
+        } 
       }
     }
     if(ret & 1)
@@ -296,7 +310,7 @@ unsigned int com_setupEsp8266()
   return ret;
 }
 //=========================================================================================
-unsigned int com_checkRxESP8266For(const char* cArr, char *fifo, unsigned int flen)
+byte com_checkRxESP8266For(char* cArr, char *fifo, unsigned int flen)
 {
   char dataByte;
 
@@ -310,7 +324,7 @@ unsigned int com_checkRxESP8266For(const char* cArr, char *fifo, unsigned int fl
 }
 //=========================================================================================
 //Funkce hleda retezec v poslednich flen prijatych znacich.
-unsigned int com_findInFifo(const char* cArr, const char *fifo, unsigned int flen)
+byte com_findInFifo(char* cArr, const char *fifo, unsigned int flen)
 {
   unsigned int ret; //navratova hodnota
   unsigned int j; //index znaku v retezci
@@ -337,7 +351,7 @@ unsigned int com_findInFifo(const char* cArr, const char *fifo, unsigned int fle
 //Funkce nahraje novy znak do fifo, novy znak bude mit index 0.
 void com_putCharInFifo(char nChar, char *fifo, unsigned int flen)
 {
-  unsigned int b;
+  byte b;
 
   b = (flen > 1);
   while (b)
@@ -386,8 +400,8 @@ void com_monitor(void)
   static char srIdxMsg; //index bufferu pro servisni zpravu
   //obecne-------------------------------------------
   char dataByte; //nacteny nebo vysilany znak
-  String page; //retezec pro vysilani
   int idx; //index pro cyklus for
+  File thisFile;
 
   //RX------------------------------------------------------
   //nacteni byte
@@ -478,12 +492,12 @@ void com_monitor(void)
           if(com_findInFifo("/favicon.ico ", rxFifo, COM_RX_LEN))
           {
             PRTDBG("\nFavicon");
-            reqState = REQSNDPGTX;
+            reqState = REQHEADTX;
           }
           else if(com_findInFifo("/ ", rxFifo, COM_RX_LEN))
           {
             PRTDBG("\nMainpage");
-            reqState = REQSNDPGTX;
+            reqState = REQHEADTX;
           }
           else if(com_findInFifo("/wtf?do=cervena ", rxFifo, COM_RX_LEN))
           {
@@ -538,56 +552,54 @@ void com_monitor(void)
       }
       break;
 
-    case REQSNDPGTX://pozadovano vysilani hlavni stranky
-      thisFile = SD.open(F("html/head.txt"), FILE_READ);
+    case REQHEADTX://pozadovano vysilani hlavni stranky
+      thisFile = SD.open(SD_FILE_HEAD, FILE_READ);
       txlen = thisFile.size();
       thisFile.close();
-      txpb = txlen; //delka paketu hlavicky zde neni omezena
+      txpb = 0;
       txch = 0; //vysilani prvniho znaku paketu
-      ackState = HEADTX; //po obdrzeni potvrzeni vysilani skocit do vysilani hlavicky
-      txState = ATSENDTX;
+      reqState = HEADTX;
+      txState = NEXTPACKTTX;
       break;
 
-    case ACKSNDTX:
-    case ACKTX: //ocekavani prijmu znaku ">" pro povoleni vysilani
-      if(rxState != WAITRX) //chyba, modul prijima jina data a prikaz je treba zrusit
-      {
-        com_delay(0);//synchronizace casu
-        txState = WAITTX;
-      }
-      else if(com_delay(2000)) //novy prikaz SEND
-      {
-        txState = ATSENDTX;
-      }
-      break;
-
-    case HEADTX: //odesilani hlavicky
-      thisFile = SD.open(F("html/head.txt"), FILE_READ);
-      txlen = thisFile.size();
-      while(thisFile.available())
-      {
-        esp8266Ser.print(thisFile.read());
-      }
-      thisFile.close();
-      //priprava na odeslani hlavni stranky
-      thisFile = SD.open(F("html/mainpage.htm"), FILE_READ);
+    case REQMNPGTX:
+      thisFile = SD.open(SD_FILE_MNPG, FILE_READ);
       txlen = thisFile.size();
       thisFile.close();
       txpb = 0;
       txch = 0; //vysilani prvniho znaku
       com_delay(0);//synchronizace casu
       reqState = MAINPAGETX;
-      ackState = NEXTPACKTTX;
+      txState = NEXTPACKTTX;
+      break;
+
+    case ACKSNDTX:
+    case ACKTX: //ocekavani prijmu znaku ">" pro povoleni vysilani
+      if(com_delay(4000)) //novy prikaz SEND
+      {
+        txState = ATSENDTX;
+      }
+      break;
+
+    case HEADTX: //odesilani hlavicky
+      thisFile = SD.open(SD_FILE_HEAD, FILE_READ);
+      while(thisFile.available())
+      {
+        dataByte = thisFile.read();
+        wrLog(dataByte, (srState == LOGSR));
+        esp8266Ser.write(dataByte);
+      }
+      thisFile.close();
+      ackState = REQMNPGTX;
       txState = ACKSNDTX;
-      WRCDBG(page);
       break;
 
     case MAINPAGETX:
       if(com_delay(ESP8266TXPER))
       {
-        thisFile = SD.open(F("html/mainpage.htm"), FILE_READ);
+        thisFile = SD.open(SD_FILE_MNPG, FILE_READ);
         thisFile.seek(txch);
-        for (idx = 0; idx < ESP8266CHARCT; idx++, txch++)
+        for (idx = 0; idx < ESP8266CHARCT && (txState == MAINPAGETX); idx++, txch++)
         {
           if(txch >= txpb)
           {
@@ -595,7 +607,6 @@ void com_monitor(void)
             reqState = MAINPAGETX;
             ackState = NEXTPACKTTX;
             txState = ACKSNDTX;
-            break;
           }
           else
           {
@@ -631,14 +642,10 @@ void com_monitor(void)
       {
         esp8266Ser.print(F("AT+CIPSEND="));
         esp8266Ser.print(client);
-        esp8266Ser.print(',');
+        esp8266Ser.print(F(","));
         esp8266Ser.println(txpb - txch);
         txState = ACKTX;
         com_delay(0); //znovunastaveni casu
-      }
-      else
-      {
-        txState = WAITTX;
       }
       break;
 
@@ -648,7 +655,8 @@ void com_monitor(void)
       analogWrite(PWM_1, 80);
       analogWrite(PWM_2, 0);
       analogWrite(PWM_3, 160);
-      txState = REQSNDPGTX;
+      reqState = REQHEADTX;
+      txState = REQHEADTX;
       break;
 
     case OFFBUTTX:
@@ -657,7 +665,8 @@ void com_monitor(void)
       analogWrite(PWM_1, 255);
       analogWrite(PWM_2, 255);
       analogWrite(PWM_3, 255);
-      txState = REQSNDPGTX;
+      reqState = REQHEADTX;
+      txState = REQHEADTX;
       break;
 
     default:
