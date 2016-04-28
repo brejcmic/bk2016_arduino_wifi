@@ -18,7 +18,7 @@ SoftwareSerial softSerial(8, 7); // RX, TX
 #define DS3231_I2C_ADDRESS 0x68
 
 #define esp8266Ser  softSerial
-#define ESP8266SPEED        9600// cilova rzchlost komunikace
+#define ESP8266SPEED        9600// cilova rychlost komunikace
 #define ESP8266CHARCT       20// pocet najednou odesilanych znaku
 #define ESP8266TXPER        10// perioda vysilani v ms
 #define ESP8266PACKETLEN    1024 //maximalni velikost packetu v byte
@@ -50,7 +50,7 @@ SoftwareSerial softSerial(8, 7); // RX, TX
 #endif
 
 typedef enum {
-  WAITTX, REQHEADTX, REQMNPGTX, ACKSNDTX, ACKTX, HEADTX, MAINPAGETX, FAVICONTX, NEXTPACKTTX, ATSENDTX, ONBUTTX, OFFBUTTX
+  WAITTX, REQHEADTX, REQMNPGTX, HEADTX, MAINPAGETX, ACKSNDTX, ACKTX, NEXTPACKTTX, LASTPACKTTX, ATSENDTX, ONBUTTX, OFFBUTTX
 } txStates_t;
 
 typedef enum {
@@ -130,7 +130,6 @@ unsigned int com_setupEsp8266()
 {
   byte ret;
   char rx[4];
-  String atMsg;
   byte idx;
   File thisFile;
   unsigned long mainPgSize;
@@ -194,10 +193,9 @@ unsigned int com_setupEsp8266()
     //rychlosti
     //----------------------------------------------------
     esp8266Ser.begin(115200);
-    atMsg = String(F("AT+UART_CUR="));
-    atMsg += ESP8266SPEED;
-    atMsg += String(F(",8,1,0,0"));
-    esp8266Ser.println(atMsg);
+    esp8266Ser.print(F("AT+UART_CUR="));
+    esp8266Ser.print(ESP8266SPEED);
+    esp8266Ser.print(F(",8,1,0,0"));
     wrMsg("\nInicializace komunikace s esp8266.\n");
     for (idx = 0; idx < 5; idx++)
     {
@@ -391,7 +389,8 @@ void com_monitor(void)
   static txStates_t ackState = WAITTX;//stav pro vysilani po obdrzeni znaku ">"
   static byte client; //klient
   static unsigned long txch = 0; //index aktualne vysilaneho znaku
-  static unsigned long txpb; //hranice vysilaneho packetu v poctu byte
+  static unsigned long txpbl; //spodni hranice vysilaneho packetu v poctu byte
+  static unsigned long txpbh; //horni hranice vysilaneho packetu v poctu byte
   static unsigned long txlen; //celkova delka zpravy
   //servis-------------------------------------------
   static srStates_t srState = WAITSR;//stav servisni linky
@@ -425,7 +424,7 @@ void com_monitor(void)
           {
             txState = ackState;//vysilani je povoleno
           }
-          else if(com_findInFifo("ERROR,", rxFifo, COM_RX_LEN))
+          else if(com_findInFifo("ERROR", rxFifo, COM_RX_LEN))
           {
             txState = WAITTX;//reset vysilani
           }
@@ -436,7 +435,7 @@ void com_monitor(void)
           {
             txState = ackState;//odeslani je potvrzeno       
           }
-          else if(com_findInFifo("ERROR,", rxFifo, COM_RX_LEN))
+          else if(com_findInFifo("ERROR", rxFifo, COM_RX_LEN))
           {
             txState = WAITTX;//reset vysilani
           }
@@ -556,7 +555,7 @@ void com_monitor(void)
       thisFile = SD.open(SD_FILE_HEAD, FILE_READ);
       txlen = thisFile.size();
       thisFile.close();
-      txpb = 0;
+      txpbh = 0;
       txch = 0; //vysilani prvniho znaku paketu
       reqState = HEADTX;
       txState = NEXTPACKTTX;
@@ -566,46 +565,30 @@ void com_monitor(void)
       thisFile = SD.open(SD_FILE_MNPG, FILE_READ);
       txlen = thisFile.size();
       thisFile.close();
-      txpb = 0;
+      txpbh = 0;
       txch = 0; //vysilani prvniho znaku
       com_delay(0);//synchronizace casu
       reqState = MAINPAGETX;
       txState = NEXTPACKTTX;
       break;
 
-    case ACKSNDTX:
-    case ACKTX: //ocekavani prijmu znaku ">" pro povoleni vysilani
-      if(com_delay(4000)) //novy prikaz SEND
-      {
-        txState = ATSENDTX;
-      }
-      break;
-
     case HEADTX: //odesilani hlavicky
-      thisFile = SD.open(SD_FILE_HEAD, FILE_READ);
-      while(thisFile.available())
-      {
-        dataByte = thisFile.read();
-        wrLog(dataByte, (srState == LOGSR));
-        esp8266Ser.write(dataByte);
-      }
-      thisFile.close();
-      ackState = REQMNPGTX;
-      txState = ACKSNDTX;
-      break;
-
-    case MAINPAGETX:
       if(com_delay(ESP8266TXPER))
       {
-        thisFile = SD.open(SD_FILE_MNPG, FILE_READ);
+        thisFile = SD.open(SD_FILE_HEAD, FILE_READ);
         thisFile.seek(txch);
-        for (idx = 0; idx < ESP8266CHARCT && (txState == MAINPAGETX); idx++, txch++)
+        for (idx = 0; idx < ESP8266CHARCT && (txState == HEADTX); idx++, txch++)
         {
-          if(txch >= txpb)
+          if(txch >= txpbh)
           {
-            com_delay(0);//synchronizace casu
-            reqState = MAINPAGETX;
-            ackState = NEXTPACKTTX;
+            if(txch >= txlen)
+            {
+              ackState = REQMNPGTX;
+            }
+            else
+            {
+              ackState = NEXTPACKTTX;
+            }
             txState = ACKSNDTX;
           }
           else
@@ -616,24 +599,76 @@ void com_monitor(void)
           }
         }
         thisFile.close();
+        com_delay(0);//synchronizace casu
+      }
+      break;
+
+    case MAINPAGETX:
+      if(com_delay(ESP8266TXPER))
+      {
+        thisFile = SD.open(SD_FILE_MNPG, FILE_READ);
+        thisFile.seek(txch);
+        for (idx = 0; idx < ESP8266CHARCT && (txState == MAINPAGETX); idx++, txch++)
+        {
+          if(txch >= txpbh)
+          {
+            if(txch >= txlen)
+            {
+              reqState = WAITTX;
+              ackState = WAITTX;
+              PRTDBG("\n\nVse odeslano");
+            }
+            else
+            {
+              ackState = NEXTPACKTTX;
+            }
+            txState = ACKSNDTX;
+          }
+          else
+          {
+            dataByte = thisFile.read();
+            wrLog(dataByte, (srState == LOGSR));
+            esp8266Ser.write(dataByte);
+          }
+        }
+        thisFile.close();
+        com_delay(0);//synchronizace casu
+      }
+      break;
+
+    case ACKSNDTX: //ocekavani prijmu "SEND OK"
+      if(com_delay(4000)) //nove odesilani packetu
+      {
+        txState = LASTPACKTTX;
+      }
+      break;
+      
+    case ACKTX: //ocekavani prijmu znaku ">" pro povoleni vysilani
+      if(com_delay(4000)) //novy prikaz SEND
+      {
+        txState = ATSENDTX;
       }
       break;
 
     case NEXTPACKTTX:
-      if(txch >= txlen)
+      if(com_delay(50)) //50 ms prodleva
       {
-        com_delay(0);//synchronizace casu
-        reqState = WAITTX;
-        txState = WAITTX;
-        PRTDBG("\n\nVse odeslano");
-      }
-      else if(com_delay(50)) //50 ms prodleva
-      {
-        txpb += ESP8266PACKETLEN;
-        if(txpb > txlen) txpb = txlen;
+        txpbh += ESP8266PACKETLEN;
+        if(txpbh > txlen) txpbh = txlen;
+        txpbl = txch;
         ackState = reqState; //po obdrzeni potvrzeni vysilani skocit do vysilani stranky
         txState = ATSENDTX;
-        PRTDBG("\nNovy packet");
+        PRTDBG("\nNovy paket");
+      }
+      break;
+
+    case LASTPACKTTX:
+      if(com_delay(50)) //50 ms prodleva
+      {
+        txch = txpbl;
+        ackState = reqState; //po obdrzeni potvrzeni vysilani skocit do vysilani stranky
+        txState = ATSENDTX;
+        PRTDBG("\nNove odesilani stareho paketu");
       }
       break;
 
@@ -643,7 +678,7 @@ void com_monitor(void)
         esp8266Ser.print(F("AT+CIPSEND="));
         esp8266Ser.print(client);
         esp8266Ser.print(F(","));
-        esp8266Ser.println(txpb - txch);
+        esp8266Ser.println(txpbh - txpbl);
         txState = ACKTX;
         com_delay(0); //znovunastaveni casu
       }
