@@ -198,6 +198,7 @@ byte com_setupEsp8266()
     esp8266Ser.print(F("AT+UART_CUR="));
     esp8266Ser.print(ESP8266SPEED);
     esp8266Ser.print(F(",8,1,0,0"));
+    esp8266Ser.print(F("\r\n"));
     wrMsg("\nInicializace komunikace s esp8266.\n");
     for (idx = 0; idx < 5; idx++)
     {
