@@ -36,12 +36,12 @@ SoftwareSerial softSerial(8, 7); // RX, TX
 #define SD_FILE_HEAD        F("html/head.txt")
 #define SD_FILE_MNPG        F("html/mainpage.htm")
 #define SD_FILE_WIFI        F("wificfg.txt")
-#define SD_FILE_SSET        F("settings/sset.txt")
-#define SD_FILE_SRIS        F("settings/sris.txt")
-#define SD_FILE_MSET        F("settings/mset.txt")
-#define SD_FILE_MRIS        F("settings/mris.txt")
+#define SD_FILE_SSET        F("cfg/sset.txt")
+#define SD_FILE_SRIS        F("cfg/sris.txt")
+#define SD_FILE_MSET        F("cfg/mset.txt")
+#define SD_FILE_MRIS        F("cfg/mris.txt")
 
-#define DEBUG       0
+#define DEBUG       1
 #define debugSer    Serial
 
 #if DEBUG == 1
@@ -249,6 +249,7 @@ unsigned int com_setupEsp8266()
       {
         wrMsg("\nPripojovani k WIFI siti\n");
         WRCDBG(thisFile.available());
+        PRTDBG("\n");
         while(thisFile.available())
         {
           var.ch = thisFile.read();
@@ -256,6 +257,7 @@ unsigned int com_setupEsp8266()
           WRCDBG(var.ch);
         }
         esp8266Ser.print(F("\r\n"));
+        PRTDBG("\n");
         thisFile.close();
         com_delay(0); //reset casu
         idx = 0;
@@ -314,6 +316,7 @@ byte com_checkRxESP8266For(String cArr, char *fifo, unsigned int flen)
   {
     dataByte = esp8266Ser.read();
     com_putCharInFifo(dataByte, fifo, flen);
+    WRCDBG(dataByte);
     return com_findInFifo(cArr, fifo, flen);
   }
   return 0;
