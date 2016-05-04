@@ -23,7 +23,7 @@ SoftwareSerial softSerial(8, 7); // RX, TX
 #define DS3231_I2C_ADDRESS 0x68
 
 #define esp8266Ser  softSerial
-#define ESP8266SPEED        9600// cilova rychlost komunikace
+#define ESP8266SPEED        19200// cilova rychlost komunikace
 #define ESP8266CHARCT       20// pocet najednou odesilanych znaku
 #define ESP8266TXPER        10// perioda vysilani v ms
 #define ESP8266PACKETLEN    1024 //maximalni velikost packetu v byte
@@ -121,23 +121,27 @@ void setup() {
   time_t currTime;
   pinMode(LED_RED, OUTPUT);           // set pin to input
   pinMode(LED_YEL, OUTPUT);           // set pin to input
+  digitalWrite(LED_RED, HIGH);
+  digitalWrite(LED_YEL, LOW);
+  com_setupServisCh();
+  if(!initSDCard()) while(1);//nekonecna smycka
+  if(!com_setupEsp8266())
+  {
+    digitalWrite(LED_YEL, HIGH);
+    while(1);
+  }
+  digitalWrite(LED_YEL, HIGH);
+  digitalWrite(LED_RED, HIGH);
+  //RTC
+  Wire.begin();
+  readDS3231time(&currTime);
+  
   pinMode(PWM_W, OUTPUT);
   pinMode(PWM_R, OUTPUT);
   pinMode(PWM_G, OUTPUT);
   pinMode(PWM_B, OUTPUT);
   pinMode(A0, OUTPUT);
   pinMode(A1, OUTPUT);
-  
-  digitalWrite(LED_RED, HIGH);
-  digitalWrite(LED_YEL, LOW);
-  com_setupServisCh();
-  if(!initSDCard()) while(1);//nekonecna smycka
-  com_setupEsp8266();
-  digitalWrite(LED_RED, LOW);
-  digitalWrite(LED_YEL, HIGH);
-  //RTC
-  Wire.begin();
-  readDS3231time(&currTime);
 }
 //=========================================================================================
 //Loop
@@ -151,7 +155,7 @@ void loop() {
 //=========================================================================================
 //Komunikace
 //=========================================================================================
-unsigned int com_setupServisCh(void)
+byte com_setupServisCh(void)
 {
   //navazani komunikace servisni linky
   //----------------------------------------------------
@@ -159,7 +163,7 @@ unsigned int com_setupServisCh(void)
   return 1;
 }
 //=========================================================================================
-unsigned int com_setupEsp8266()
+byte com_setupEsp8266()
 {
   byte ret;
   union{
