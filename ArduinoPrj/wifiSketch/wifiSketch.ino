@@ -207,7 +207,7 @@ unsigned int com_setupEsp8266()
     esp8266Ser.println(F("AT"));
     com_delay(0); //reset casu
     idx = 0;
-    while (!com_checkRxESP8266For("OK", var.rx, 4) && (ret & 1))
+    while (!com_checkRxESP8266For(String(F("OK")), var.rx, 4) && (ret & 1))
     {
       if(com_delay(1000))
       {
@@ -227,7 +227,7 @@ unsigned int com_setupEsp8266()
       //----------------------------------------------------
       esp8266Ser.println(F("AT+CIPMUX=1"));
       com_delay(0); //reset casu
-      while (!com_checkRxESP8266For("OK", var.rx, 4) && (ret & 1))
+      while (!com_checkRxESP8266For(String(F("OK")), var.rx, 4) && (ret & 1))
       {
         if(com_delay(1000))
         {
@@ -259,7 +259,7 @@ unsigned int com_setupEsp8266()
         thisFile.close();
         com_delay(0); //reset casu
         idx = 0;
-        while (!com_checkRxESP8266For("OK", var.rx, 4) && (ret & 1))
+        while (!com_checkRxESP8266For(String(F("OK")), var.rx, 4) && (ret & 1))
         {
           if(com_delay(1000))
           {
@@ -306,7 +306,7 @@ unsigned int com_setupEsp8266()
   return ret;
 }
 //=========================================================================================
-byte com_checkRxESP8266For(char* cArr, char *fifo, unsigned int flen)
+byte com_checkRxESP8266For(String cArr, char *fifo, unsigned int flen)
 {
   char dataByte;
 
@@ -320,17 +320,13 @@ byte com_checkRxESP8266For(char* cArr, char *fifo, unsigned int flen)
 }
 //=========================================================================================
 //Funkce hleda retezec v poslednich flen prijatych znacich.
-byte com_findInFifo(char* cArr, const char *fifo, unsigned int flen)
+byte com_findInFifo(String cArr, const char *fifo, unsigned int flen)
 {
-  unsigned int ret; //navratova hodnota
-  unsigned int j; //index znaku v retezci
+  byte ret; //navratova hodnota
+  byte j; //index znaku v retezci
 
   //zjisteni delky retezce
-  j = 0;
-  while (cArr[j] != '\0')
-  {
-    j++;
-  }
+  j = cArr.length();
 
   ret = (j != 0 && j <= flen);
   flen = 0;
@@ -338,7 +334,7 @@ byte com_findInFifo(char* cArr, const char *fifo, unsigned int flen)
   while (j > 0 && ret)
   {
     j--;
-    ret = (fifo[flen] == cArr[j]);
+    ret = (fifo[flen] == cArr.charAt(j));
     flen++;
   }
   return ret;
@@ -411,7 +407,7 @@ void com_monitor(void)
     switch (rxState)
     {
       case WAITRX:
-        if(com_findInFifo("+IPD,", rxFifo, COM_RX_LEN))
+        if(com_findInFifo(String(F("+IPD,")), rxFifo, COM_RX_LEN))
         {
           PRTDBG("\nPrijem");
           rxState = CLIENTRX;//zaznamenan prijem
@@ -422,18 +418,18 @@ void com_monitor(void)
           {
             txState = ackState;//vysilani je povoleno
           }
-          else if(com_findInFifo("ERROR", rxFifo, COM_RX_LEN))
+          else if(com_findInFifo(String(F("ERROR")), rxFifo, COM_RX_LEN))
           {
             txState = WAITTX;//reset vysilani
           }
         }
         else if(txState == ACKSNDTX)
         {
-          if(com_findInFifo("SEND OK", rxFifo, COM_RX_LEN))
+          if(com_findInFifo(String(F("SEND OK")), rxFifo, COM_RX_LEN))
           {
             txState = ackState;//odeslani je potvrzeno       
           }
-          else if(com_findInFifo("ERROR", rxFifo, COM_RX_LEN))
+          else if(com_findInFifo(String(F("ERROR")), rxFifo, COM_RX_LEN))
           {
             txState = WAITTX;//reset vysilani
           }
@@ -472,7 +468,7 @@ void com_monitor(void)
         break;
 
       case REQRX://cekani na GET
-        if(com_findInFifo("GET ", rxFifo, COM_RX_LEN))
+        if(com_findInFifo(String(F("GET ")), rxFifo, COM_RX_LEN))
         {
           rxState = URLRX;
         }
@@ -486,22 +482,22 @@ void com_monitor(void)
         if(dataByte == ' ')
         {
           //identifikace stranky
-          if(com_findInFifo("/favicon.ico ", rxFifo, COM_RX_LEN))
+          if(com_findInFifo(String(F("/favicon.ico ")), rxFifo, COM_RX_LEN))
           {
             PRTDBG("\nFavicon");
             reqState = REQHEADTX;
           }
-          else if(com_findInFifo("/ ", rxFifo, COM_RX_LEN))
+          else if(com_findInFifo(String(F("/ ")), rxFifo, COM_RX_LEN))
           {
             PRTDBG("\nMainpage");
             reqState = REQHEADTX;
           }
-          else if(com_findInFifo("/wtf?do=cervena ", rxFifo, COM_RX_LEN))
+          else if(com_findInFifo(String(F("/wtf?do=cervena ")), rxFifo, COM_RX_LEN))
           {
             PRTDBG("\nTlacitko zapni");
             reqState = ONBUTTX;
           }
-          else if(com_findInFifo("/wtf?do=zluta ", rxFifo, COM_RX_LEN))
+          else if(com_findInFifo(String(F("/wtf?do=zluta ")), rxFifo, COM_RX_LEN))
           {
             PRTDBG("\nTlacitko vypni");
             reqState = OFFBUTTX;
@@ -717,14 +713,14 @@ void com_monitor(void)
     switch (srState)
     {
       case LOGSR: //vypisuje log az do prijeti SR+END
-        if(com_findInFifo("SR+END", srFifo, COM_SR_LEN))
+        if(com_findInFifo(String(F("SR+END")), srFifo, COM_SR_LEN))
         {
           wrMsg("\nSR+END\n\nOK\n");
           srState = WAITSR;
           break;
         }
       case WAITSR:
-        if(com_findInFifo("AT", srFifo, COM_SR_LEN))
+        if(com_findInFifo(String(F("AT")), srFifo, COM_SR_LEN))
         {
           srMsg[0] = 'A';
           srMsg[1] = 'T';
