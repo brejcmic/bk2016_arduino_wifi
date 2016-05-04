@@ -23,7 +23,7 @@ SoftwareSerial softSerial(8, 7); // RX, TX
 #define DS3231_I2C_ADDRESS 0x68
 
 #define esp8266Ser  softSerial
-#define ESP8266SPEED        19200// cilova rychlost komunikace
+#define ESP8266SPEED        9600// cilova rychlost komunikace
 #define ESP8266CHARCT       20// pocet najednou odesilanych znaku
 #define ESP8266TXPER        10// perioda vysilani v ms
 #define ESP8266PACKETLEN    1024 //maximalni velikost packetu v byte
@@ -41,7 +41,7 @@ SoftwareSerial softSerial(8, 7); // RX, TX
 #define SD_FILE_MSET        F("cfg/mset.txt")
 #define SD_FILE_MRIS        F("cfg/mris.txt")
 
-#define DEBUG       1
+#define DEBUG       0
 #define debugSer    Serial
 
 #if DEBUG == 1
@@ -131,7 +131,7 @@ void setup() {
     while(1);
   }
   digitalWrite(LED_YEL, HIGH);
-  digitalWrite(LED_RED, HIGH);
+  digitalWrite(LED_RED, LOW);
   //RTC
   Wire.begin();
   readDS3231time(&currTime);
