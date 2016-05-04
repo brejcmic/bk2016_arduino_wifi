@@ -1,17 +1,22 @@
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
+#include <Wire.h>
 #include <SoftwareSerial.h>
 #include <avr/pgmspace.h>
 
 SoftwareSerial softSerial(8, 7); // RX, TX
 
+//=========================================================================================
+//Symbolicke konstanty
+//=========================================================================================
 #define LED_RED             4
 #define LED_YEL             2
-#define PWM_1               3
-#define PWM_2               5
-#define PWM_3               6
-#define PWM_4               9
+
+#define PWM_W               3
+#define PWM_R               5
+#define PWM_G               6
+#define PWM_B               9
 
 #define VERSION   "Aquaduino verze 160420"
 
@@ -31,8 +36,12 @@ SoftwareSerial softSerial(8, 7); // RX, TX
 #define SD_FILE_HEAD        F("html/head.txt")
 #define SD_FILE_MNPG        F("html/mainpage.htm")
 #define SD_FILE_WIFI        F("wificfg.txt")
+#define SD_FILE_SSET        F("settings/sset.txt")
+#define SD_FILE_SRIS        F("settings/sris.txt")
+#define SD_FILE_MSET        F("settings/mset.txt")
+#define SD_FILE_MRIS        F("settings/mris.txt")
 
-#define DEBUG       1
+#define DEBUG       0
 #define debugSer    Serial
 
 #if DEBUG == 1
@@ -49,6 +58,9 @@ SoftwareSerial softSerial(8, 7); // RX, TX
 #define wrMsg(x)    debugSer.print(F(x)) //vypis zpravy
 #endif
 
+//=========================================================================================
+//Nove datove typy
+//=========================================================================================
 typedef enum {
   WAITTX, REQHEADTX, REQMNPGTX, HEADTX, MAINPAGETX, ACKSNDTX, ACKTX, NEXTPACKTTX, LASTPACKTTX, ATSENDTX, ONBUTTX, OFFBUTTX
 } txStates_t;
@@ -70,53 +82,74 @@ typedef struct {
   byte month;
   byte year;
 } time_t;
+
+typedef union {
+  byte mem[3];
+  struct{
+    byte hour;
+    byte minute;
+    byte ramp;
+  }p;
+} deadline_t;
+
+typedef enum{
+  IDLE_STATE, 
+  SUNSET_IDLE, SUNSET_INIT, SUNSET_SOON, SUNSET_MIDDLE, SUNSET_LATE,
+  SUNRISE_IDLE, SUNRISE_INIT, SUNRISE_SOON, SUNRISE_MIDDLE, SUNRISE_LATE,
+  MOONSET_IDLE, MOONSET_INIT, MOONSET,
+  MOONRISE_IDLE, MOONRISE_INIT, MOONRISE
+}
+ledState_t;
+
 //=========================================================================================
+//Globalni promenne
+//=========================================================================================
+deadline_t  sunset;
+deadline_t  sunrise;
+deadline_t  moonset;
+deadline_t  moonrise;
+
+ledState_t ledState;
+
+//=========================================================================================
+//PROGRAM
+//=========================================================================================
+//Setup
+//=========================================================================================
+
 void setup() {
+  time_t currTime;
   pinMode(LED_RED, OUTPUT);           // set pin to input
   pinMode(LED_YEL, OUTPUT);           // set pin to input
-  pinMode(PWM_1, OUTPUT);
-  pinMode(PWM_2, OUTPUT);
-  pinMode(PWM_3, OUTPUT);
-  pinMode(PWM_4, OUTPUT);
+  pinMode(PWM_W, OUTPUT);
+  pinMode(PWM_R, OUTPUT);
+  pinMode(PWM_G, OUTPUT);
+  pinMode(PWM_B, OUTPUT);
   pinMode(A0, OUTPUT);
   pinMode(A1, OUTPUT);
+  
   digitalWrite(LED_RED, HIGH);
   digitalWrite(LED_YEL, LOW);
   com_setupServisCh();
+  if(!initSDCard()) while(1);//nekonecna smycka
   com_setupEsp8266();
   digitalWrite(LED_RED, LOW);
   digitalWrite(LED_YEL, HIGH);
   //RTC
   Wire.begin();
+  readDS3231time(&currTime);
 }
+//=========================================================================================
+//Loop
 //=========================================================================================
 void loop() {
   com_monitor();
-}
-//=========================================================================================
-// Convert normal decimal numbers to binary coded decimal
-byte decToBcd(byte val){
-    return( (val/10*16) + (val%10) );
+  compareTime();
+  ledControl();
 }
 
-// Convert binary coded decimal to normal decimal numbers
-byte bcdToDec(byte val){
-    return( (val/16*10) + (val%16) );
-}
-void readDS3231time(time_t *clk){
-    Wire.beginTransmission(DS3231_I2C_ADDRESS);
-    Wire.write(0); // set DS3231 register pointer to 00h
-    Wire.endTransmission();
-    Wire.requestFrom(DS3231_I2C_ADDRESS, 7);
-    // request seven bytes of data from DS3231 starting from register 00h
-    clk->second = bcdToDec(Wire.read() & 0x7f);
-    clk->minute = bcdToDec(Wire.read());
-    clk->hour = bcdToDec(Wire.read() & 0x3f);
-    clk->dayOfWeek = bcdToDec(Wire.read());
-    clk->dayOfMonth = bcdToDec(Wire.read());
-    clk->month = bcdToDec(Wire.read());
-    clk->year = bcdToDec(Wire.read());
-}
+//=========================================================================================
+//Komunikace
 //=========================================================================================
 unsigned int com_setupServisCh(void)
 {
@@ -129,51 +162,16 @@ unsigned int com_setupServisCh(void)
 unsigned int com_setupEsp8266()
 {
   byte ret;
-  char rx[4];
+  union{
+    char ch;
+    char rx[4];
+  }var;
   byte idx;
   File thisFile;
-  unsigned long mainPgSize;
-  //SD karta
+  
   ret = 2; //pocet pokusu o navazani spojeni
   //Predpoklada se na pocatku uspesna inicializace
   ret = (ret << 1) + 1;
-  if(!SD.begin() && ret) 
-  {
-    wrMsg("\n<X> SD karta neni k dispozici");
-    ret = 0;
-  }
-  else
-  {
-    wrMsg("\n<ok> Nalezena SD karta");
-    wrMsg("\n\nHledani hlavickoveho souboru: html/head.txt");
-    if(SD.exists(SD_FILE_HEAD))
-    {
-      wrMsg("\n<ok> Hlavickovy soubor nalezen, nebude generovan novy");
-    }
-    else
-    {
-      wrMsg("\n<X> Hlavickovy soubor nenalezen, generuje se novy");
-      wrMsg("\n\nHledani souboru html/mainpage.htm");
-      thisFile = SD.open(SD_FILE_MNPG, FILE_READ);
-      if(thisFile)
-      {
-        wrMsg("\n<ok> Soubor mainpage.htm nalezen");
-        mainPgSize = thisFile.size();
-        thisFile.close();
-
-        thisFile = SD.open(SD_FILE_HEAD, FILE_WRITE);
-        thisFile.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: "));
-        thisFile.print(mainPgSize);
-        thisFile.print(F("\r\n\r\n"));
-        thisFile.close();
-      }
-      else
-      {
-        wrMsg("\n<X> Soubor hlavni stranky nebyl nalezen");
-        ret = 0;
-      }
-    }
-  }
   while (ret > 1)
   {
     //RESET pokud je treba
@@ -209,7 +207,7 @@ unsigned int com_setupEsp8266()
     esp8266Ser.println(F("AT"));
     com_delay(0); //reset casu
     idx = 0;
-    while (!com_checkRxESP8266For("OK", rx, 4) && (ret & 1))
+    while (!com_checkRxESP8266For("OK", var.rx, 4) && (ret & 1))
     {
       if(com_delay(1000))
       {
@@ -229,7 +227,7 @@ unsigned int com_setupEsp8266()
       //----------------------------------------------------
       esp8266Ser.println(F("AT+CIPMUX=1"));
       com_delay(0); //reset casu
-      while (!com_checkRxESP8266For("OK", rx, 4) && (ret & 1))
+      while (!com_checkRxESP8266For("OK", var.rx, 4) && (ret & 1))
       {
         if(com_delay(1000))
         {
@@ -253,15 +251,15 @@ unsigned int com_setupEsp8266()
         WRCDBG(thisFile.available());
         while(thisFile.available())
         {
-          rx[0] = thisFile.read();
-          esp8266Ser.print(rx[0]);
-          WRCDBG(rx[0]);
+          var.ch = thisFile.read();
+          esp8266Ser.print(var.ch);
+          WRCDBG(var.ch);
         }
         esp8266Ser.print(F("\r\n"));
         thisFile.close();
         com_delay(0); //reset casu
         idx = 0;
-        while (!com_checkRxESP8266For("OK", rx, 4) && (ret & 1))
+        while (!com_checkRxESP8266For("OK", var.rx, 4) && (ret & 1))
         {
           if(com_delay(1000))
           {
@@ -282,7 +280,7 @@ unsigned int com_setupEsp8266()
       //----------------------------------------------------
       esp8266Ser.println(F("AT+CIPSERVER=1,80"));//port 80
       com_delay(0); //reset casu
-      while (!com_checkRxESP8266For("OK", rx, 4)  && (ret & 1))
+      while (!com_checkRxESP8266For("OK", var.rx, 4)  && (ret & 1))
       {
         if(com_delay(1000))
         {
@@ -687,9 +685,9 @@ void com_monitor(void)
     case ONBUTTX:
       digitalWrite(LED_RED, HIGH);
       digitalWrite(LED_YEL, LOW);
-      analogWrite(PWM_1, 80);
-      analogWrite(PWM_2, 0);
-      analogWrite(PWM_3, 160);
+      analogWrite(PWM_W, 80);
+      analogWrite(PWM_R, 0);
+      analogWrite(PWM_G, 160);
       reqState = REQHEADTX;
       txState = REQHEADTX;
       break;
@@ -697,9 +695,9 @@ void com_monitor(void)
     case OFFBUTTX:
       digitalWrite(LED_RED, LOW);
       digitalWrite(LED_YEL, HIGH);
-      analogWrite(PWM_1, 255);
-      analogWrite(PWM_2, 255);
-      analogWrite(PWM_3, 255);
+      analogWrite(PWM_W, 255);
+      analogWrite(PWM_R, 255);
+      analogWrite(PWM_G, 255);
       reqState = REQHEADTX;
       txState = REQHEADTX;
       break;
@@ -756,6 +754,461 @@ void com_monitor(void)
         srState = WAITSR;
         break;
     }
+  }
+}
+
+//=========================================================================================
+//Pristup k souborum
+//=========================================================================================
+byte initSDCard()
+{
+  File thisFile;
+  byte ret;
+  unsigned long mainPgSize;
+  String fileName;
+  
+  ret = SD.begin();
+  if(ret)
+  {
+    wrMsg("\n<ok> Nalezena SD karta");
+    wrMsg("\n\nHledani hlavickoveho souboru: html/head.txt");
+    if(SD.exists(SD_FILE_HEAD))
+    {
+      wrMsg("\n<ok> Hlavickovy soubor nalezen, nebude generovan novy");
+    }
+    else
+    {
+      wrMsg("\n<X> Hlavickovy soubor nenalezen, generuje se novy");
+      wrMsg("\n\nHledani souboru html/mainpage.htm");
+      thisFile = SD.open(SD_FILE_MNPG, FILE_READ);
+      if(thisFile)
+      {
+        wrMsg("\n<ok> Soubor mainpage.htm nalezen");
+        mainPgSize = thisFile.size();
+        thisFile.close();
+
+        thisFile = SD.open(SD_FILE_HEAD, FILE_WRITE);
+        thisFile.print(F("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\nContent-Length: "));
+        thisFile.print(mainPgSize);
+        thisFile.print(F("\r\n\r\n"));
+        thisFile.close();
+      }
+      else
+      {
+        wrMsg("\n<X> Soubor hlavni stranky nebyl nalezen");
+        ret = 0;
+      }
+    }
+    fileName = String(SD_FILE_SSET);
+    if(SD.exists(fileName))
+    {
+      readDLFile(&sunset, fileName);
+    }
+    else
+    {
+      sunset.p.hour = 18;
+      sunset.p.minute = 0;
+      sunset.p.ramp = 10;
+      writeDLFile(&sunset, fileName);
+    }
+    fileName = String(SD_FILE_SRIS);
+    if(SD.exists(fileName))
+    {
+      readDLFile(&sunrise, fileName);
+    }
+    else
+    {
+      sunrise.p.hour = 6;
+      sunrise.p.minute = 0;
+      sunrise.p.ramp = 10;
+      writeDLFile(&sunrise, fileName);
+    }
+    fileName = String(SD_FILE_MSET);
+    if(SD.exists(fileName))
+    {
+      readDLFile(&moonset, fileName);
+    }
+    else
+    {
+      moonset.p.hour = 4;
+      moonset.p.minute = 0;
+      moonset.p.ramp = 10;
+      writeDLFile(&moonset, fileName);
+    }
+    fileName = String(SD_FILE_MRIS);
+    if(SD.exists(fileName))
+    {
+      readDLFile(&moonrise, fileName);
+    }
+    else
+    {
+      moonrise.p.hour = 20;
+      moonrise.p.minute = 0;
+      moonrise.p.ramp = 10;
+      writeDLFile(&moonrise, fileName);
+    }
+  }
+  else
+  {
+    wrMsg("\n<X> SD karta neni k dispozici");
+  }
+  return ret;
+}
+//=========================================================================================
+void readDLFile(deadline_t * dl, String fileName)
+{
+  File thisFile;
+  byte idx;
+  byte part;
+  union{
+    char arr[3];
+    struct{
+      char tens;
+      char ones;
+      char ch;
+    }p;
+  }var;
+  thisFile = SD.open(fileName, FILE_READ);
+
+  for(part = 0; part < 3; part++)
+  {
+    var.arr[0] = '0';
+    var.arr[1] = '0';
+    var.arr[2] = '0';
+    for(idx = 0; idx < 2 && thisFile.available() && var.p.ch != ','; idx++)
+    {
+      var.p.ch = thisFile.read();
+      if(var.p.ch >= '0' && var.p.ch <= '9')
+      {
+        var.arr[idx] = var.p.ch;
+      }
+    }
+    dl->mem[part] = asciiToDec(var.p.tens, var.p.ones);
+  }
+  thisFile.close();
+}
+//=========================================================================================
+void writeDLFile(deadline_t * dl, String fileName)
+{
+  File thisFile;
+  byte part;
+
+  SD.remove(fileName);
+  thisFile = SD.open(fileName, FILE_WRITE);
+
+  for(part = 0; part < 3; part++)
+  {
+    thisFile.print(dl->mem[part]);
+    thisFile.print(",");
+  }
+  thisFile.close();
+}
+//=========================================================================================
+//Rizeni HW
+//=========================================================================================
+// Convert normal decimal numbers to binary coded decimal
+byte decToBcd(byte val){
+    return( (val/10*16) + (val%10) );
+}
+
+// Convert binary coded decimal to normal decimal numbers
+byte bcdToDec(byte val){
+    return( (val/16*10) + (val%16) );
+}
+
+// Convert ascii symbols to decimal numbers
+byte asciiToDec(byte tens, byte ones){
+    return((tens-'0')*10) + (ones-'0');
+}
+//=========================================================================================
+void readDS3231time(time_t *clk){
+    Wire.beginTransmission(DS3231_I2C_ADDRESS);
+    Wire.write(0); // set DS3231 register pointer to 00h
+    Wire.endTransmission();
+    Wire.requestFrom(DS3231_I2C_ADDRESS, 7);
+    // request seven bytes of data from DS3231 starting from register 00h
+    clk->second = bcdToDec(Wire.read() & 0x7f);
+    clk->minute = bcdToDec(Wire.read());
+    clk->hour = bcdToDec(Wire.read() & 0x3f);
+    clk->dayOfWeek = bcdToDec(Wire.read());
+    clk->dayOfMonth = bcdToDec(Wire.read());
+    clk->month = bcdToDec(Wire.read());
+    clk->year = bcdToDec(Wire.read());
+}
+//=========================================================================================
+byte setDS3231time(time_t *clk){
+  byte ret;
+  ret = clk->second < 60 && clk->minute < 60 && clk->hour < 60&& 
+       clk->dayOfWeek < 8 && clk->dayOfWeek > 0 && 
+       clk->dayOfMonth < 32 && clk->dayOfMonth > 0 && 
+       clk->month < 13 && clk->month > 0&& clk->year < 100;
+  //sets time and date data to DS3231
+  if(ret)
+  {
+    Wire.beginTransmission(DS3231_I2C_ADDRESS);
+    Wire.write(0); // set next input to start at the seconds register
+    Wire.write(decToBcd(clk->second)); // set seconds
+    Wire.write(decToBcd(clk->minute)); // set minutes
+    Wire.write(decToBcd(clk->hour)); // set hours
+    Wire.write(decToBcd(clk->dayOfWeek)); // set day of week (1=Sunday, 7=Saturday)
+    Wire.write(decToBcd(clk->dayOfMonth)); // set date (1 to 31)
+    Wire.write(decToBcd(clk->month)); // set month
+    Wire.write(decToBcd(clk->year)); // set year (0 to 99)
+    Wire.endTransmission();
+  }
+  return ret;  
+}
+//=========================================================================================
+void compareTime(){
+  ledState_t state;
+  time_t clk;
+  byte deltaHourA, deltaHourB, deltaMinuteA, deltaMinuteB;
+  
+  readDS3231time(&clk);
+  if(ledState == IDLE_STATE || ledState == SUNSET_IDLE || ledState == SUNRISE_IDLE || 
+     ledState == MOONSET_IDLE || ledState == MOONRISE_IDLE)
+  {
+//////////////////////////////////SUNSET//////////////////////////////////
+    state = SUNSET_INIT;
+
+    deltaHourA = 0;
+    if(clk.hour < sunset.p.hour) deltaHourA += 24;
+    deltaHourA += clk.hour - sunset.p.hour;
+
+    deltaMinuteA = 0;
+    if(clk.minute < sunset.p.minute) deltaMinuteA += 60;
+    deltaHourA += clk.minute - sunset.p.minute;
+    
+//////////////////////////////////SUNRISE//////////////////////////////////
+    deltaHourB = 0;
+    if(clk.hour < sunrise.p.hour) deltaHourB += 24;
+    deltaHourB += clk.hour - sunrise.p.hour;
+
+    deltaMinuteB = 0;
+    if(clk.minute < sunrise.p.minute) deltaMinuteB += 60;
+    deltaHourB += clk.minute - sunrise.p.minute;
+
+    if(deltaHourA > deltaHourB){
+      state = SUNRISE_INIT;
+      deltaHourA = deltaHourB;
+      deltaMinuteA = deltaMinuteB;
+    }
+    else if(deltaHourA == deltaHourB){
+      if(deltaMinuteA > deltaMinuteB){
+        state = SUNRISE_INIT;
+        deltaHourA = deltaHourB;
+        deltaMinuteA = deltaMinuteB;
+      }
+    }
+//////////////////////////////////MOONSET//////////////////////////////////
+    deltaHourB = 0;
+    if(clk.hour < moonset.p.hour) deltaHourB += 24;
+    deltaHourB += clk.hour - moonset.p.hour;
+
+    deltaMinuteB = 0;
+    if(clk.minute < moonset.p.minute) deltaMinuteB += 60;
+    deltaHourB += clk.minute - moonset.p.minute;
+
+    if(deltaHourA > deltaHourB){
+      state = MOONSET_INIT;
+      deltaHourA = deltaHourB;
+      deltaMinuteA = deltaMinuteB;
+    }
+    else if(deltaHourA == deltaHourB){
+      if(deltaMinuteA > deltaMinuteB){
+        state = MOONSET_INIT;
+        deltaHourA = deltaHourB;
+        deltaMinuteA = deltaMinuteB;
+      }
+    }
+//////////////////////////////////MOONRISE//////////////////////////////////
+    deltaHourB = 0;
+    if(clk.hour < moonrise.p.hour) deltaHourB += 24;
+    deltaHourB += clk.hour - moonrise.p.hour;
+
+    deltaMinuteB = 0;
+    if(clk.minute < moonrise.p.minute) deltaMinuteB += 60;
+    deltaHourB += clk.minute - moonrise.p.minute;
+
+    if(deltaHourA > deltaHourB){
+      state = MOONRISE_INIT;
+    }
+    else if(deltaHourA == deltaHourB){
+      if(deltaMinuteA > deltaMinuteB){
+        state = MOONRISE_INIT;
+      }
+    }
+//////////////////////////////////////////////////////////////////////
+    if (state == SUNSET_INIT && ledState != SUNSET_IDLE){
+      ledState = SUNSET_INIT;
+    }
+    if (state == SUNRISE_INIT && ledState != SUNRISE_IDLE){
+      ledState = SUNRISE_INIT;
+    }
+    if (state == MOONSET_INIT && ledState != MOONSET_IDLE){
+      ledState = MOONSET_INIT;
+    }
+    if (state == MOONRISE_INIT && ledState != MOONRISE_IDLE){
+      ledState = MOONRISE_INIT;
+    }
+  }
+}
+//=========================================================================================
+void ledControl(){
+  static int i = 0;
+  static unsigned long timer = 0;
+/*------------------SUNSET_INITIALIZING------------------*/  
+  switch(ledState){
+    
+    case SUNSET_INIT:
+      i = 0;
+      timer = millis();
+      ledState = SUNSET_SOON;
+      analogWrite(PWM_B, 0);                     //0
+      break;
+    case SUNSET_SOON:
+      if((millis() - timer) >= ((((sunset.p.ramp*60000)/8)*1)/255)){
+        timer = millis();
+        analogWrite(PWM_R, i);                     //0-255
+        analogWrite(PWM_G, (i*0.19));              //0-50
+        if(i < 255){
+          i++;
+        }
+        else{
+          ledState = SUNSET_MIDDLE;
+          i = 255;
+          analogWrite(PWM_G, 50);                   //50
+          analogWrite(PWM_B, 0);                    //0
+        }
+      }
+      break;
+    case SUNSET_MIDDLE: //i musi byt 255
+      if((millis() - timer) >= ((((sunset.p.ramp*60000)/8)*5)/35)){
+        timer = millis();
+        analogWrite(PWM_R, i);                    //255-220
+        if(i > 220){
+          i--;
+        }
+        else{
+          ledState = SUNSET_LATE;
+          i = 0;
+        }
+      }
+      break;
+    case SUNSET_LATE:
+      if((millis() - timer) >= ((((sunset.p.ramp*60000)/8)*2)/255)){
+        timer = millis();
+        analogWrite(PWM_R, 220+(i*35/255));       //220-255
+        analogWrite(PWM_G, 50+(i*205/255));       //50-255
+        analogWrite(PWM_B, i);                    //0-255
+        analogWrite(PWM_W, i);                    //0-255
+        if(i < 255){
+          i++;
+        }
+        else{
+          ledState = SUNSET_IDLE;
+          i = 0;
+        }
+      }
+      break;
+/*------------------SUNRISE_INITIALIZING------------------*/ 
+    case SUNRISE_INIT:
+      i = 255;
+      timer = millis();
+      ledState = SUNRISE_SOON;
+      break;
+    case SUNRISE_SOON:
+      if((millis() - timer) >= ((((sunset.p.ramp*60000)/8)*2)/255)){
+        timer = millis();
+        analogWrite(PWM_R, 220+(i*7/51));         //255-220
+        analogWrite(PWM_G, 50+(i*41/51));         //255-50
+        analogWrite(PWM_B, i);                    //255-0
+        analogWrite(PWM_W, i);                    //0-255
+        if(i > 0){
+          i--;
+        }
+        else{
+          ledState = SUNRISE_MIDDLE;
+          i = 220;
+          analogWrite(PWM_G, 50);                   //50
+          analogWrite(PWM_B, 0);                    //0
+        }
+      }
+      break;
+    case SUNRISE_MIDDLE: //i musi byt 255
+      if((millis() - timer) >= ((((sunset.p.ramp*60000)/5)*2)/35)){
+        timer = millis();
+        analogWrite(PWM_R, i);                    //220-255
+        if(i < 255){
+          i++;
+        }
+        else{
+          ledState = SUNRISE_LATE;
+          i = 255;
+          analogWrite(PWM_B, 0);                    //0
+        }
+      }
+      break;
+    case SUNRISE_LATE:
+      if((millis() - timer) >= ((((sunset.p.ramp*60000)/8)*1)/255)){
+        timer = millis();
+        analogWrite(PWM_R, i);                    //255-0
+        analogWrite(PWM_G, (i*10/51));            //50-0
+        if(i > 0){
+          i--;
+        }
+        else{
+          ledState = SUNRISE_IDLE;
+          i = 0;
+        }
+      }
+      break;
+/*------------------MOONSET_INITIALIZING------------------*/ 
+    case MOONSET_INIT:
+      i = 0;
+      timer = millis();
+      ledState = MOONSET;
+      analogWrite(PWM_R, 0);                    //0
+      break;
+    case MOONSET:
+      if((millis() - timer) >= ((moonset.p.ramp*60000)/60)){
+        timer = millis();
+        analogWrite(PWM_G, i/2);                //0-30
+        analogWrite(PWM_B, i);                  //0-60
+        if(i < 60){
+          i++;
+        }
+        else{
+          ledState = MOONSET_IDLE;
+          i = 0;
+        }
+      }
+      break;
+/*------------------MOONRISE_INITIALIZING------------------*/ 
+    case MOONRISE_INIT:
+      i = 60;
+      timer = millis();
+      ledState = MOONRISE;
+      analogWrite(PWM_R, 0);                    //0
+      break;
+    case MOONRISE:
+      if((millis() - timer) >= ((moonrise.p.ramp*60000)/60)){
+        timer = millis();
+        analogWrite(PWM_G, i/2);                //30-0
+        analogWrite(PWM_B, i);                  //60-0
+        if(i > 0){
+          i--;
+        }
+        else{
+          ledState = MOONRISE_IDLE;
+          i = 0;
+        }
+      }
+      break;
+      
+    default:
+      i = 0;
+      break;
   }
 }
 
